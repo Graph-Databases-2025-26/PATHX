@@ -48,3 +48,24 @@ This stage focuses on:
 ```bash
 git clone https://github.com/Graph-Databases-2025-26/PathX.git
 cd PathX
+```
+
+## 2️⃣ Create a virtual environment
+```bash
+python -m venv .venv
+source .venv/bin/activate     # macOS / Linux
+# or
+.venv\Scripts\activate        # Windows
+```
+
+## 3️⃣ Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+## 4️⃣ Initialize DuckDB and load data
+```bash
+python scripts/init_duckdb.py
+```
+
+This creates db/sample.duckdb and loads data from data/customers.csv.
