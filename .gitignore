@@ -1,0 +1,8 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+env/
+*.db
+.DS_Store
+results.json
