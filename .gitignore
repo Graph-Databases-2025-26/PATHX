@@ -10,6 +10,8 @@ db/
 results/
 data/
 ground/
+*.duckdb
 
 # VS Code
 .vscode/
+
