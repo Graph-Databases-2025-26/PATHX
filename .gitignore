@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 env/
 *.db
+<<<<<<< HEAD
 *.log
 *.json
 db/
@@ -13,3 +14,7 @@ ground/
 
 # VS Code
 .vscode/
+=======
+.DS_Store
+*.json
+>>>>>>> d587db5 (gitignore)
