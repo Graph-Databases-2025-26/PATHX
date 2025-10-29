@@ -4,5 +4,12 @@ __pycache__/
 .venv/
 env/
 *.db
-.DS_Store
-results.json
+*.log
+*.json
+db/
+results/
+data/
+ground/
+
+# VS Code
+.vscode/
