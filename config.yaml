@@ -1,0 +1,43 @@
+model:
+  provider: ibm_watsonx
+  name: 
+
+confidence:
+  tau: 
+
+execution:
+  mode: auto           # auto | llm-only | db-only
+  scan: auto           # table | key | auto
+
+database:
+  type: duckdb
+  path: "./db"
+  preload: true
+
+io:
+  data_dir: "./data"
+  prompts_dir: "./prompts"
+  queries_dir: "./queries"
+  runs_dir: "./runs"
+  logs_dir: "./logs"
+
+logging:
+  level: INFO
+  json: true
+  file: "./logs/galois.log"
+
+evaluation:
+  metrics: ["f1_cell", "cardinality", "tuple_constraint", "avg_score"]
+  output_file: "./runs/results.json"
+  format: "json"              # table | csv | json | tex
+  overall: true               # produce single aggregated result
+  cell_metric: "similarity"   # exact | similarity
+  tuple_metric: "constraint"  # constraint | similarity
+   
+
+versions:
+  wo: true     # Without optimization
+  s: true      # Selective pushdown
+  a: true      # All pushdown
+  f: true      # Confidence-based
+
