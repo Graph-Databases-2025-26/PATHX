@@ -1,5 +1,6 @@
 import os, sys, json, time, glob
-from db_utils import connect_db, run_query
+
+from src.db_utils import connect_db, run_query
 
 def export_dataset(dataset: str, fmt: str = "simple"):
     dataset = dataset.upper()
