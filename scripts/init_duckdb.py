@@ -1,31 +1,23 @@
-import duckdb, os, sys, glob, pathlib
+import duckdb, os, sys, glob
 
 def init_dataset(dataset: str):
-    DATASET = dataset.upper()
-    dataset_lower = dataset.lower()
+    dataset = dataset.upper()
     os.makedirs("db", exist_ok=True)
-    db_path = f"db/{DATASET}.duckdb"
+    db_path = f"db/{dataset}.duckdb"
+    data_dir = f"data/{dataset}"
 
-    data_dir = pathlib.Path("data") / dataset_lower
-    if not data_dir.is_dir():
+    if not os.path.isdir(data_dir):
         raise SystemExit(f"Data folder not found: {data_dir}")
 
     con = duckdb.connect(db_path)
     try:
-        ingest_sql = data_dir / f"ingest_{dataset_lower}.sql"
-        if ingest_sql.is_file():
-            # ingestion from dataset
-            con.execute(open(ingest_sql, encoding="utf-8").read())
-            print(f"Executed ingest script: {ingest_sql}")
-        else:
-            # Fallback: load CSV automatically
-            for csv in glob.glob(str(data_dir / "*.csv")):
-                table = pathlib.Path(csv).stem
-                con.execute(f"""
-                    CREATE TABLE IF NOT EXISTS "{table}" AS
-                    SELECT * FROM read_csv_auto(?, header=True);
-                """, [csv])
-            print(f"ℹNo ingest_{dataset_lower}.sql found, loaded CSVs instead.")
+        # Загружаем все CSV в отдельные таблицы по имени файла
+        for csv in glob.glob(os.path.join(data_dir, "*.csv")):
+            table = os.path.splitext(os.path.basename(csv))[0]
+            con.execute(f"""
+                CREATE TABLE IF NOT EXISTS "{table}" AS
+                SELECT * FROM read_csv_auto(?, header=True);
+            """, [csv])
         print(f"Initialized {db_path} from {data_dir}")
     finally:
         con.close()
