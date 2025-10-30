@@ -1,0 +1,19 @@
+model:
+  provider: ibm
+  name: watsonx-llm
+  temperature: 0.0
+
+confidence:
+  tau: 0.7               #  pushdown treshold (confidence threshold)
+
+execution:
+  scan: auto             # auto | table | key
+  max_retries: 3         # retry count for failed executions
+
+io:
+  data_root: data
+  ground_root: ground_truth_result
+  submissions_root: submissions
+
+logging:
+  level: INFO
