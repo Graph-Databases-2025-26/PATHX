@@ -30,7 +30,103 @@ This stage focuses on:
 
 ---
 
-## 🧠 Technology Stack
+## GALOIS Paper: overview and key insights
+
+The SIGMOD 2025 paper *“Logical and Physical Optimizations for SQL Query Execution over Large Language Models”* presents Galois, a system that enables SQL query execution directly over Large Language Models (LLMs). The observation is that, although LLMs are capable of answering declarative queries and extracting structured data from unstructured sources, their performance declines with complex queries, often resulting in incomplete or inaccurate outputs. Existing database optimization techniques target first cost or latency reduction without addressing adequately the challenge of ensuring result quality.
+
+Galois implements an intermediate optimization layer between SQL and LLMs while treating the LLM as a storage layer. The system modifies both logical and physical query plans to adapt to the distinct operational characteristics of language models.
+
+Galois presents several key innovations. First, it redefines the query optimization process to balance execution cost and result quality. It also introduces two physical operators for retrieving data from LLMs: table-scan and key-scan. Since LLMs lack catalogs, Galois dynamically builds metadata and estimates confidence scores for query execution based on the model’s self-assessed certainty.
+
+Across multiple datasets, Galois achieved an improvement of 144% in result quality over natural language queries and of 29% over direct SQL execution, with a moderate increase in computational cost.
+
+The main lessons we keep in mind for our implementation are:
+- Introduce logical and physical plans that adapt query decomposition to the LLM's strengths and limitations
+- Treat the LLM as a data source, not just a reasoning tool
+- Maintain a cost-quality balance
+- Structure results in JSON to ensure compatibility with analysis tools
+
+---
+
+## Detailed Implementation schedule
+
+Here are the deadlines by task that we gave to ourselves according to the overall phase deadlines
+
+**Phase 1 – Tech Selection and System Setup**
+
+Overall deadline: 31 October 2025
+
+| Deadline         | Task                        | Description                                                                                                                    |
+| ------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **18 Oct**    | Literature review           | Study and summarize the *Galois* SIGMOD 2025 paper. Extract core design principles and optimization strategies.                |
+| **19–20 Oct** | System architecture design  | Define system components (SQL layer, LLM layer, orchestration, evaluation). Draw architecture diagram.                         |
+| **21 Oct**    | Python environment setup    | Create virtual environment, install core libraries. |
+| **21 Oct** | Database setup              | Install DuckDB and/or PostgreSQL, create reference databases, import provided datasets.                                        |
+| **24 Oct**    | SQL connection test         | Write Python scripts to connect, query, and retrieve results in JSON format.                                                   |
+| **25 Oct**    | EXPLAIN plan test           | Execute `EXPLAIN` queries and capture logical plans for analysis.                                                              |
+| **30–31 Oct** | Final verification & report | Run end-to-end test and commit initial setup. Prepare README + PDF.                                                |
+
+
+**Phase 2 – NL and SQL Baselines**
+
+Overall deadline: 19 November 2025
+
+| Date          | Task                         | Description                                                                                          |
+| ------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **1–3 Nov**   | NL baseline scripting        | Write prompts for natural-language queries, ensure JSON-formatted responses.                         |
+| **4–6 Nov**   | SQL baseline scripting       | Write equivalent SQL queries and test direct execution on DuckDB/PostgreSQL.                         |
+| **7–8 Nov**   | LLM orchestration            | Integrate both baselines into LangChain workflow for reproducible runs.                              |
+| **9–11 Nov**  | Prompt strategy testing      | Experiment with prompt variations (few-shot, chain-of-thought, direct). Evaluate parsing robustness. |
+| **12–14 Nov** | Evaluation metrics setup     | Implement evaluation library to compute accuracy, recall, and F1 for NL/SQL results.                 |
+| **15–17 Nov** | Unit testing                 | Build test runner to execute all queries, gather JSON outputs, and compare results.                  |
+| **18–19 Nov** | Documentation & verification | Prepare README + PDF replicating first two columns of Table 3 (Galois). Upload to GitHub and Crane.  |
+
+
+**Phase 3 – Implementation of Galois Features (Part I)**
+
+Intermediate demo deadline: 5 December 2025
+
+| Date             | Task                              | Description                                                                                                  |
+| ---------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **20–22 Nov**    | Implement LLMScan Operator        | Develop class or function to query the LLM using a table name and list of attributes. Return tuples as JSON. |
+| **23–26 Nov**    | Implement Filter-LLMScan Operator | Extend previous operator to handle condition pushdowns (`WHERE` clauses).                                    |
+| **27–29 Nov**    | Multi-relation joining            | Add support for joins and post-processing (attribute matching, tuple merging).                               |
+| **30 Nov–2 Dec** | Two-phase retrieval               | Implement key-first (Key-Scan) method based on Galois’ approach.                                             |
+| **3–4 Dec**      | End-to-end system test            | Run EU Cities example (naïve vs. optimized plan) and collect metrics (tokens, accuracy, execution time).     |
+| **5 Dec**        | Demo preparation                  | Create short demonstration for advisor comparing approaches and results.                                     |
+
+
+**Phase 4 – Implementation of Galois Features (Part II)**
+
+Partial deadline: 12 December 2025
+
+Final deadline: 23 December 2025
+
+| Date          | Task                           | Description                                                                                       |
+| ------------- | ------------------------------ | ------------------------------------------------------------------------------------------------- |
+| **6–8 Dec**   | Galois Without Optimizations   | Implement baseline (WO) version of Galois for replication of column 3 of Table 3.                 |
+| **9–11 Dec**  | Testing and metrics            | Run experiments, collect results, and compute F1-Cell, Cardinality, and Tuple Constraint metrics. |
+| **12 Dec**    | Advisor demo                   | Present informal results replicating Table 3 column 3.                                            |
+| **13–16 Dec** | Implement Galois Selective     | Add logic for pushing down most selective conditions (based on model confidence).                 |
+| **17–19 Dec** | Implement Galois All Attribute | Extend query optimization to all attributes and evaluate cost/quality tradeoff.                   |
+| **20–22 Dec** | Implement Galois Full          | Combine logical and physical optimizations, finalize confidence-driven cost model.                |
+| **23 Dec**    | Final verification and report  | Replicate complete Table 3, finalize demo and PDF report for submission.                          |
+
+**Phase 5 – Final Presentation**
+
+Deadline: 8 January 2026
+
+
+| Date          | Task              | Description                                                                                 |
+| ------------- | ----------------- | ------------------------------------------------------------------------------------------- |
+| **2-4 Jan** | Slide preparation | Draft slides summarizing system architecture, implementation stages, and results.           |
+| **5–7 Jan**   | Rehearsal         | Practice group presentation and finalize PDF export.                                        |
+| **8 Jan**     | Final submission  | Submit PDF slides on Crane and present during group session.                      |
+
+
+---
+
+## Technology Stack
 
 | Component | Tool / Library | Description |
 |------------|----------------|--------------|
