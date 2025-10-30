@@ -165,3 +165,22 @@ python scripts/init_duckdb.py
 ```
 
 This creates db/sample.duckdb and loads data from data/customers.csv.
+
+## ⚙️ Typical usage (manual commands)
+
+```bash
+# 1. Create a virtual environment
+python -m venv .venv
+source .venv/bin/activate
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Build the ground truth
+python scripts/build_ground_truth.py --data-root data --ground-root ground_truth_result \
+  --datasets flight-2 flight-4 fortune geo premier presidents world movies
+
+# 4. Verify the evaluation (baseline == ground)
+python scripts/galois_eval.py --ground ground_truth_result --submissions ground_truth_result \
+  --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 --cell-metric similarity --tuple-metric constraint
+```
