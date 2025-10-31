@@ -1,19 +1,40 @@
 model:
-  provider: ibm
-  name: watsonx-llm
-  temperature: 0.0
+  provider: ibm_watsonx
+  name: 
 
 confidence:
-  tau: 0.7               #  pushdown treshold (confidence threshold)
+  tau:                 # pushdown treshold (confidence threshold)
 
 execution:
-  scan: auto             # auto | table | key
-  max_retries: 3         # retry count for failed executions
+  mode: auto           # auto | llm-only | db-only
+  scan: auto           # table | key | auto
+
+database:
+  type: duckdb
+  path: "./db"
+  preload: true
 
 io:
-  data_root: data
-  ground_root: ground_truth_result
-  submissions_root: submissions
+  data_dir: "./data"
+  prompts_dir: "./src/llm"
+  queries_dir: "./src/run_queries.py"
+  result_dir: "./submissions"
 
 logging:
-  level: INFO
+  level: "INFO"
+  json_format: true
+
+evaluation:
+  metrics: ["f1_cell", "cardinality", "tuple_constraint", "avg_score"]
+  format: "json"              # table | csv | json | tex
+  overall: true               # produce single aggregated result
+  cell_metric: "similarity"   # exact | similarity
+  tuple_metric: "constraint"  # constraint | similarity
+   
+
+versions:
+  wo: true     # Without optimization
+  s: true      # Selective pushdown
+  a: true      # All pushdown
+  f: true      # Confidence-based
+
