@@ -71,6 +71,50 @@ This stage focuses on:
   \item \textbf{logging} -- record prompts, LLM latency, token usage, and validation errors for debugging and analysis.
 \end{itemize}
 
+\section{ Directories}
+
+\begin{description}
+
+  \item[\texttt{/data}]%
+Stores datasets (e.g. .csv files), query files (.sql), and text inputs (.txt, for NL), as well as ingest.sql for each dataset. 
+  
+  \item[\texttt{/ground}]%
+Reference data used for evaluation.
+
+  \begin{itemize}
+    \item \texttt{./output} — Generated results ready for comparison.
+  \end{itemize}
+
+  \item[\texttt{/db}]%
+Contains all the databases for datasets and it is in .gitignore.
+
+  \item[\texttt{/scripts}]%
+Files provided by tutor for evaluation and etc.
+
+\item[\texttt{/src}]%
+Project’s core codebase, divided into the modules below:
+  \begin{itemize}
+    \item \texttt{/db} — For Initialisation connection with DuckDB and for ingestion csv files to duckdb.
+    \item \texttt{/llm} — For prompting and connecting to LLM.
+    \item \texttt{/pipelines} — For running queries in json, implementing EXPLAIN command and initial baselines for future stages.
+    \item \texttt{/utils} — Utilities such as loggers to make the program’s behavior observable and timer for compare runs and report the evaluation.
+  \end{itemize}
+
+\item[\texttt{/submissions}]%
+Final result of our system in both formats including \texttt{.json} and \texttt{.txt}, and also EXPLAIN output for displaying physical and logical plan.
+
+  \item[\texttt{/config}]%
+  Contains configuration setup files that contains:
+  \begin{itemize}
+    \item \texttt{.env} — Environment-specific variables (e.g. IBM watsonx credentials, API keys, service URLs).
+    \item \texttt{config.yaml} — Main configuration file.
+  \end{itemize}
+
+ \item[\texttt{/test}]%
+Holds the test scripts, for both small parts and full flows.
+
+\end{description}
+
 \section{GALOIS Paper: Overview and Key Insights}
 
 The SIGMOD 2025 paper \emph{``Logical and Physical Optimizations for SQL Query Execution over Large Language Models''} presents \textbf{Galois}, a system that enables SQL query execution directly over Large Language Models (LLMs). The observation is that, although LLMs are capable of answering declarative queries and extracting structured data from unstructured sources, their performance declines with complex queries, often resulting in incomplete or inaccurate outputs. Existing database optimization techniques target first cost or latency reduction without adequately addressing the challenge of ensuring result quality.
