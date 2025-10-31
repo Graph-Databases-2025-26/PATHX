@@ -79,14 +79,14 @@ Then we’ll develop and test the optimized versions of Galois (Selective, All-A
 
 ## 🛠️ Installation and Setup
 
-### 1️⃣ Clone the repository
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/Graph-Databases-2025-26/PathX.git
 cd PathX
 ```
 
-## 2️⃣ Create a virtual environment
+## 2. Create a virtual environment
 
 ```bash
 python -m venv .venv
@@ -95,48 +95,37 @@ source .venv/bin/activate     # macOS / Linux
 .venv\Scripts\activate        # Windows
 ```
 
-## 3️⃣ Install dependencies
+## 3. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
+# 🛠️ Commands and functions
 
-## 4️⃣ Initialize DuckDB and load data
-
+## 1. Build the ground truth
 ```bash
-python scripts/init_duckdb.py
-```
-
-This creates db/sample.duckdb and loads data from data/customers.csv.
-
-## ⚙️ Typical usage (manual commands)
-
-```bash
-# 1. Create a virtual environment
-python -m venv .venv
-source .venv/bin/activate
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Build the ground truth
 python scripts/build_ground_truth.py --data-root data --ground-root ground_truth_result \
   --datasets flight-2 flight-4 fortune geo premier presidents world movies
+```
 
-# 4. To ingest the datasets to database
+## 2. To ingest the datasets to database
+```bash
 python src/pipelines/ingest_all.py --datasets <datasetname1> <datasetname2> # by name
 python src/pipelines/ingest_all.py # all
+```
 
-# 5. To process queries
+## 3. To process queries
+```bash
 python -m src.pipelines.run_queries
+```
 
-# 6. To export EXPLAIN
-python src/pipelines/db_explain.py    --datasets <datasetname1> <datasetname2>  --format txt --db-path ./database.duckdb # to .txt
-python src/pipelines/db_explain.py    --datasets <datasetname1> <datasetname2> --format json --db-path ./database.duckdb # to .json
-#OR
-python src/pipelines/db_explain.py    --datasets <datasetname1> <datasetname2> --format both --db-path ./database.duckdb # to .json and .txt
+## 4. To export EXPLAIN
+```bash
+python -m src.pipelines.run_explain_all
+```
 
-# 7. Verify the evaluation (baseline == ground)
+## 5. Verify the evaluation (baseline == ground)
+```bash
 python scripts/galois_eval.py --ground ground --submissions submissions \
   --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 --cell-metric similarity --tuple-metric constraint
 
