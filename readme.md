@@ -192,6 +192,6 @@ python src/pipelines/explain_text.py    --datasets <datasetname1> <datasetname2>
 python src/pipelines/explain_json.py    --datasets <datasetname1> <datasetname2> # to .json
 
 # 7. Verify the evaluation (baseline == ground)
-python scripts/galois_eval.py --ground ground_truth_result --submissions ground_truth_result \
+python scripts/galois_eval.py --ground ground --submissions submissions \
   --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 --cell-metric similarity --tuple-metric constraint
 ```
