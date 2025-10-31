@@ -17,7 +17,7 @@ database:
 io:
   data_dir: "./data"
   prompts_dir: "./src/llm"
-  queries_dir: "./src/run_queries.py"
+  queries_dir: "./src/pipelines"
   result_dir: "./submissions"
 
 logging:
