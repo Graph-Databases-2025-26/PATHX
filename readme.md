@@ -180,7 +180,18 @@ pip install -r requirements.txt
 python scripts/build_ground_truth.py --data-root data --ground-root ground_truth_result \
   --datasets flight-2 flight-4 fortune geo premier presidents world movies
 
-# 4. Verify the evaluation (baseline == ground)
+# 4. To ingest the datasets to database
+python src/pipelines/ingest_all.py --datasets <datasetname1> <datasetname2> # by name
+python src/pipelines/ingest_all.py # all
+
+# 5. To process queries
+python src/pipelines/run_queries.py     --datasets <datasetname1> <datasetname2>
+
+# 6. To export EXPLAIN
+python src/pipelines/explain_text.py    --datasets <datasetname1> <datasetname2> # to .txt
+python src/pipelines/explain_json.py    --datasets <datasetname1> <datasetname2> # to .json
+
+# 7. Verify the evaluation (baseline == ground)
 python scripts/galois_eval.py --ground ground_truth_result --submissions ground_truth_result \
   --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 --cell-metric similarity --tuple-metric constraint
 ```
