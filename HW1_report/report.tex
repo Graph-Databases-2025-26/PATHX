@@ -1,0 +1,181 @@
+\documentclass[12pt,a4paper]{report}
+\usepackage[utf8]{inputenc}
+\usepackage{booktabs}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{titlesec}
+\usepackage{longtable}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\geometry{margin=1in}
+
+\titleformat{\chapter}[hang]{\normalfont\huge\bfseries}{\thechapter.}{20pt}{\Huge}
+
+\title{\textbf{Graph Databases --- Main Path Project (PathX)}}
+\author{University of Padua \\[0.5em]
+\textbf{Course:} Graph Databases \\
+\textbf{Professor:} Gianmaria Silvello \\[1em]
+\textbf{Team:} Juliette Tonneau, Minseok Kim, Bita Khashechian, Danil Smirnov}
+\date{Academic Year 2025/26}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\chapter{Project Description}
+This repository contains the implementation of the \textbf{Main Path} project for the \textit{Graph Databases} course.
+
+The goal is to build a \textbf{system that integrates an SQL database} with \textbf{a Large Language Model (LLM)}, enabling natural language query processing and query optimization inspired by the \textit{Galois} paper presented in the course.
+
+\chapter{Stage 1 — Tech Selection and System Setup}
+This stage focuses on:
+\begin{itemize}
+    \item Selecting and setting up the development environment,
+    \item Preparing a local SQL database (DuckDB),
+    \item Implementing a Python pipeline that:
+    \begin{enumerate}
+        \item Connects to the database,
+        \item Runs SQL queries from a \texttt{.sql} file,
+        \item Saves results in a \texttt{.json} output file.
+    \end{enumerate}
+\end{itemize}
+
+\noindent The teacher must be able to execute a single Python command to generate a JSON with result sets for each query. (Reference: Table 2 of the paper.)
+
+\chapter{GALOIS Paper Overview and Key Insights}
+The SIGMOD 2025 paper \textit{"Logical and Physical Optimizations for SQL Query Execution over Large Language Models"} presents Galois, a system that enables SQL query execution directly over Large Language Models (LLMs).
+
+Galois introduces innovations that redefine query optimization to balance execution cost and result quality, introducing operators such as table-scan and key-scan. It dynamically builds metadata and estimates confidence scores based on model self-assessment.
+
+Key lessons for implementation:
+\begin{itemize}
+    \item Introduce logical and physical plans that adapt query decomposition to the LLM's strengths and limitations
+    \item Treat the LLM as a data source, not just a reasoning tool
+    \item Maintain a cost-quality balance
+    \item Structure results in JSON to ensure compatibility with analysis tools
+\end{itemize}
+
+\chapter{Implementation Schedule}
+
+\section*{Phase 1 – Tech Selection and System Setup}
+\begin{longtable}{lll}
+\toprule
+\textbf{Deadline} & \textbf{Task} & \textbf{Description} \\
+\midrule
+18 Oct & Literature review & Study and summarize the Galois SIGMOD 2025 paper. \\
+19–20 Oct & System architecture design & Define system components and architecture diagram. \\
+21 Oct & Python environment setup & Create virtual environment, install libraries. \\
+21 Oct & Database setup & Install DuckDB/PostgreSQL, import datasets. \\
+24 Oct & SQL connection test & Write Python scripts to connect, query, and retrieve JSON results. \\
+25 Oct & EXPLAIN plan test & Execute \texttt{EXPLAIN} queries for logical plan analysis. \\
+30–31 Oct & Final verification & Run end-to-end tests and commit setup. \\
+\bottomrule
+\end{longtable}
+
+\section*{Phase 2 – NL and SQL Baselines}
+\begin{longtable}{lll}
+\toprule
+\textbf{Date} & \textbf{Task} & \textbf{Description} \\
+\midrule
+1–3 Nov & NL baseline scripting & Write prompts for natural-language queries. \\
+4–6 Nov & SQL baseline scripting & Write equivalent SQL queries. \\
+7–8 Nov & LLM orchestration & Integrate baselines into LangChain workflow. \\
+9–11 Nov & Prompt strategy testing & Experiment with prompt variations. \\
+12–14 Nov & Evaluation metrics setup & Implement evaluation library (accuracy, recall, F1). \\
+15–17 Nov & Unit testing & Build test runner for JSON output validation. \\
+18–19 Nov & Documentation & Prepare README + PDF. \\
+\bottomrule
+\end{longtable}
+
+\section*{Phase 3 – Implementation of Galois Features (Part I)}
+\begin{longtable}{lll}
+\toprule
+\textbf{Date} & \textbf{Task} & \textbf{Description} \\
+\midrule
+20–22 Nov & Implement LLMScan Operator & Develop class to query LLM with table name and attributes. \\
+23–26 Nov & Implement Filter-LLMScan Operator & Extend to handle WHERE clauses. \\
+27–29 Nov & Multi-relation joining & Add joins and tuple merging. \\
+30 Nov–2 Dec & Two-phase retrieval & Implement key-first (Key-Scan) retrieval. \\
+3–4 Dec & End-to-end test & Run EU Cities example and collect metrics. \\
+5 Dec & Demo preparation & Prepare demo comparing approaches. \\
+\bottomrule
+\end{longtable}
+
+\section*{Phase 4 – Implementation of Galois Features (Part II)}
+\begin{longtable}{lll}
+\toprule
+\textbf{Date} & \textbf{Task} & \textbf{Description} \\
+\midrule
+6–8 Dec & Galois Without Optimizations & Implement baseline version for Table 3 replication. \\
+9–11 Dec & Testing and metrics & Run experiments and compute metrics. \\
+12 Dec & Advisor demo & Present informal results. \\
+13–16 Dec & Implement Galois Selective & Add logic for selective conditions. \\
+17–19 Dec & Implement Galois All Attribute & Extend optimization to all attributes. \\
+20–22 Dec & Implement Galois Full & Combine optimizations and finalize model. \\
+23 Dec & Final verification & Replicate Table 3 and finalize demo. \\
+\bottomrule
+\end{longtable}
+
+\section*{Phase 5 – Final Presentation}
+\begin{longtable}{lll}
+\toprule
+\textbf{Date} & \textbf{Task} & \textbf{Description} \\
+\midrule
+2–4 Jan & Slide preparation & Draft slides summarizing results. \\
+5–7 Jan & Rehearsal & Practice and finalize slides. \\
+8 Jan & Final submission & Submit slides and present. \\
+\bottomrule
+\end{longtable}
+
+\chapter{Technology Stack}
+\begin{longtable}{lll}
+\toprule
+\textbf{Component} & \textbf{Tool / Library} & \textbf{Description} \\
+\midrule
+Language & Python 3.11+ & Main programming language \\
+Database & DuckDB & Lightweight SQL database \\
+LLM (later) & IBM WatsonX.ai / OpenAI API & Large Language Model integration \\
+Libraries & duckdb, pandas, sqlglot, python-dotenv & Core dependencies \\
+IDE & Visual Studio Code & Development environment \\
+\bottomrule
+\end{longtable}
+
+\chapter{Installation and Setup}
+\section*{Clone the repository}
+\begin{verbatim}
+git clone https://github.com/Graph-Databases-2025-26/PathX.git
+cd PathX
+\end{verbatim}
+
+\section*{Create a virtual environment}
+\begin{verbatim}
+python -m venv .venv
+source .venv/bin/activate     # macOS / Linux
+.venv\Scripts\activate        # Windows
+\end{verbatim}
+
+\section*{Install dependencies}
+\begin{verbatim}
+pip install -r requirements.txt
+\end{verbatim}
+
+\section*{Initialize DuckDB and load data}
+\begin{verbatim}
+python scripts/init_duckdb.py
+\end{verbatim}
+
+\section*{Typical usage}
+\begin{verbatim}
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python scripts/build_ground_truth.py --data-root data --ground-root ground_truth_result \
+  --datasets flight-2 flight-4 fortune geo premier presidents world movies
+
+python scripts/galois_eval.py --ground ground_truth_result --submissions ground_truth_result \
+  --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 --cell-metric similarity --tuple-metric constraint
+\end{verbatim}
+
+\end{document}
