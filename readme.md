@@ -102,6 +102,20 @@ pip install -r requirements.txt
 ```
 # 🛠️ Commands and functions
 
+## 🧭 Full Automated Pipeline
+Run everything end-to-end with a single command 👇
+```bash
+python scripts/run_all.py
+```
+
+Options:
+```bash
+python scripts/run_all.py --datasets movies world        # subset
+python scripts/run_all.py --skip-explain                 # skip EXPLAIN
+python scripts/run_all.py --baseline                     # compare ground vs ground
+```
+## 🧩 Manually:
+
 ## 1. Build the ground truth
 ```bash
 python scripts/build_ground_truth.py --data-root data --ground-root ground \
@@ -123,13 +137,49 @@ python -m src.pipelines.run_queries
 ```bash
 python -m src.pipelines.run_explain_all
 ```
+Results are stored under:
+```bash
+results/
+├─ explain_json/<DATASET>/queryN__explain.json
+├─ explain_json/<DATASET>/queryN__analyze.json
+├─ explain_txt/<DATASET>/queryN__explain.txt
+└─ explain_txt/<DATASET>/queryN__analyze.txt
+```
 
 ## 5. Verify the evaluation (baseline == ground)
 ```bash
 python scripts/galois_eval.py --ground ground --submissions submissions \
   --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 --cell-metric similarity --tuple-metric constraint
-
+```
+or formatted output:
+```bash
   python scripts/galois_eval.py --ground ground --submissions submissions \
   --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 \
   --cell-metric similarity --tuple-metric constraint --overall --format table
+```
+
+# 📂 Project Structure
+```bash
+pathX/
+├── data/                      # all input datasets (CSV, SQL, JSON)
+├── db/                        # generated DuckDB databases per dataset
+├── ground_truth_result/       # reference query outputs
+├── results/
+│   ├── explain_json/          # JSON plans (EXPLAIN / ANALYZE)
+│   └── explain_txt/           # text-based EXPLAIN trees
+├── submissions/               # generated query results
+│
+├── scripts/                   # CLI scripts and automation tools
+│   ├── build_ground_truth.py
+│   ├── galois_eval.py
+│   ├── run_all.py
+│   └── ...
+│
+├── src/
+│   ├── db/                    # database clients (DuckDB)
+│   ├── pipelines/             # ingestion, queries, explain pipelines
+│   ├── utils/                 # logging, explain_export, etc.
+│   └── ...
+│
+└── requirements.txt
 ```
