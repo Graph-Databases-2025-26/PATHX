@@ -7,8 +7,8 @@ env/
 *.db
 *.log
 *.json
-db/
 results/
+submissions/
 data/
 ground/
 *.duckdb

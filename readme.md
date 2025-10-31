@@ -123,7 +123,24 @@ pip install -r requirements.txt
 python scripts/build_ground_truth.py --data-root data --ground-root ground_truth_result \
   --datasets flight-2 flight-4 fortune geo premier presidents world movies
 
-# 4. Verify the evaluation (baseline == ground)
-python scripts/galois_eval.py --ground ground_truth_result --submissions ground_truth_result \
+# 4. To ingest the datasets to database
+python src/pipelines/ingest_all.py --datasets <datasetname1> <datasetname2> # by name
+python src/pipelines/ingest_all.py # all
+
+# 5. To process queries
+python -m src.pipelines.run_queries
+
+# 6. To export EXPLAIN
+python src/pipelines/db_explain.py    --datasets <datasetname1> <datasetname2>  --format txt --db-path ./database.duckdb # to .txt
+python src/pipelines/db_explain.py    --datasets <datasetname1> <datasetname2> --format json --db-path ./database.duckdb # to .json
+#OR
+python src/pipelines/db_explain.py    --datasets <datasetname1> <datasetname2> --format both --db-path ./database.duckdb # to .json and .txt
+
+# 7. Verify the evaluation (baseline == ground)
+python scripts/galois_eval.py --ground ground --submissions submissions \
   --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 --cell-metric similarity --tuple-metric constraint
+
+  python galois_eval.py --ground ground --submissions submissions \
+  --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 \
+  --cell-metric similarity --tuple-metric constraint --overall --format table
 ```
