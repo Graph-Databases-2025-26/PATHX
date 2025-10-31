@@ -43,6 +43,39 @@
 
 The goal is to build a \textbf{system that integrates an SQL database} with \textbf{a Large Language Model (LLM)}, enabling natural language query processing and query optimization inspired by the \emph{Galois} paper presented in the course.
 
+
+\section{GALOIS Paper: Overview and Key Insights}
+
+The SIGMOD 2025 paper \emph{``Logical and Physical Optimizations for SQL Query Execution over Large Language Models''} presents \textbf{Galois}, a system that enables SQL query execution directly over Large Language Models (LLMs). The observation is that, although LLMs are capable of answering declarative queries and extracting structured data from unstructured sources, their performance declines with complex queries, often resulting in incomplete or inaccurate outputs. Existing database optimization techniques target first cost or latency reduction without adequately addressing the challenge of ensuring result quality.
+
+Galois implements an \textbf{intermediate optimization layer} between SQL or NL queries and LLMs while treating the LLM as a \textbf{storage layer}. The system modifies both logical and physical query plans to adapt to the distinct operational characteristics of language models.
+
+\subsection*{Key innovations we retain}
+
+\begin{itemize}[nosep]
+  \item Redefine the query optimization process to \textbf{balance execution cost and result quality}.
+  \item Introduce two physical operators for retrieving data from LLMs: \emph{table-scan} and \emph{key-scan}.
+  \item Dynamically build metadata and estimate confidence scores since LLMs lack catalogs.
+  \item Treat the \textbf{LLM as a data source}, not only a reasoning tool.
+  \item Maintain a \textbf{cost--quality} balance.
+  \item Structure results in \textbf{JSON} to ensure compatibility with analysis tools.
+\end{itemize}
+
+\section{Detailed Implementation Schedule}
+
+\subsection*{Phase 1 – Tech Selection and System Setup}
+Set up the full system (architecture, Python environment, DuckDB databases) with setup tests and documentation.
+
+\subsection*{Phase 2 – NL and SQL Baselines}
+Build NL and SQL baselines, integrate into LangChain, test prompting strategies, and set up evaluation metrics (accuracy, F1).
+
+\subsection*{Phase 3 – Galois Features (Part I)}
+Implement core Galois features (LLMScan, Filter-LLMScan, joins, two-phase retrieval) and prepare a demo comparing naïve vs.\ optimized runs.
+
+\subsection*{Phase 4 – Galois Features (Part II)}
+Develop and test optimized versions (Selective, All-Attribute, Full), replicate key results, and finalize the report.
+
+
 \section{Stage 1 --- Tech Selection and System Setup}
 
 This stage focuses on:
@@ -81,10 +114,6 @@ Stores datasets (e.g. .csv files), query files (.sql), and text inputs (.txt, fo
   \item[\texttt{/ground}]%
 Reference data used for evaluation.
 
-  \begin{itemize}
-    \item \texttt{./output} — Generated results ready for comparison.
-  \end{itemize}
-
   \item[\texttt{/db}]%
 Contains all the databases for datasets and it is in .gitignore.
 
@@ -115,37 +144,6 @@ Holds the test scripts, for both small parts and full flows.
 
 \end{description}
 
-\section{GALOIS Paper: Overview and Key Insights}
-
-The SIGMOD 2025 paper \emph{``Logical and Physical Optimizations for SQL Query Execution over Large Language Models''} presents \textbf{Galois}, a system that enables SQL query execution directly over Large Language Models (LLMs). The observation is that, although LLMs are capable of answering declarative queries and extracting structured data from unstructured sources, their performance declines with complex queries, often resulting in incomplete or inaccurate outputs. Existing database optimization techniques target first cost or latency reduction without adequately addressing the challenge of ensuring result quality.
-
-Galois implements an \textbf{intermediate optimization layer} between SQL or NL queries and LLMs while treating the LLM as a \textbf{storage layer}. The system modifies both logical and physical query plans to adapt to the distinct operational characteristics of language models.
-
-\subsection*{Key innovations we retain}
-
-\begin{itemize}[nosep]
-  \item Redefine the query optimization process to \textbf{balance execution cost and result quality}.
-  \item Introduce two physical operators for retrieving data from LLMs: \emph{table-scan} and \emph{key-scan}.
-  \item Dynamically build metadata and estimate confidence scores since LLMs lack catalogs.
-  \item Treat the \textbf{LLM as a data source}, not only a reasoning tool.
-  \item Maintain a \textbf{cost--quality} balance.
-  \item Structure results in \textbf{JSON} to ensure compatibility with analysis tools.
-\end{itemize}
-
-\section{Detailed Implementation Schedule}
-
-\subsection*{Phase 1 – Tech Selection and System Setup}
-Set up the full system (architecture, Python environment, DuckDB databases) with setup tests and documentation.
-
-\subsection*{Phase 2 – NL and SQL Baselines}
-Build NL and SQL baselines, integrate into LangChain, test prompting strategies, and set up evaluation metrics (accuracy, F1).
-
-\subsection*{Phase 3 – Galois Features (Part I)}
-Implement core Galois features (LLMScan, Filter-LLMScan, joins, two-phase retrieval) and prepare a demo comparing naïve vs.\ optimized runs.
-
-\subsection*{Phase 4 – Galois Features (Part II)}
-Develop and test optimized versions (Selective, All-Attribute, Full), replicate key results, and finalize the report.
-
 \section{Technology Stack}
 
 \begin{table}[h]
@@ -156,7 +154,7 @@ Develop and test optimized versions (Selective, All-Attribute, Full), replicate 
     \midrule
     Language & Python 3.11+ & Main programming language \\
     Database & DuckDB & Lightweight, file-based SQL DB optimized for analytics \\
-    LLM (later) & IBM WatsonX.ai / OpenAI API & LLM integration for later stages \\
+    LLM (later) & IBM WatsonX.ai & LLM integration for later stages \\
     Libraries & \texttt{duckdb}, \texttt{pandas}, \texttt{sqlglot}, \texttt{python-dotenv} & Core Python dependencies \\
     IDE & Visual Studio Code & Main development environment \\
     \bottomrule
@@ -164,55 +162,8 @@ Develop and test optimized versions (Selective, All-Attribute, Full), replicate 
   \caption{Technology stack.}
 \end{table}
 
-\section{Installation and Setup}
+\section{Implementation and Setup}
 
-\subsection*{1. Clone the repository}
 
-\begin{lstlisting}[style=bashstyle]
-git clone https://github.com/Graph-Databases-2025-26/PathX.git
-cd PathX
-\end{lstlisting}
-
-\subsection*{2. Create a virtual environment}
-
-\begin{lstlisting}[style=bashstyle]
-python -m venv .venv
-source .venv/bin/activate     # macOS / Linux
-# or
-.venv\Scripts\activate        # Windows
-\end{lstlisting}
-
-\subsection*{3. Install dependencies}
-
-\begin{lstlisting}[style=bashstyle]
-pip install -r requirements.txt
-\end{lstlisting}
-
-\subsection*{4. Initialize DuckDB and load data}
-
-\begin{lstlisting}[style=bashstyle]
-python scripts/init_duckdb.py
-\end{lstlisting}
-
-This creates \texttt{db/sample.duckdb} and loads data from \texttt{data/customers.csv}.
-
-\section{Typical Usage (Manual Commands)}
-
-\begin{lstlisting}[style=bashstyle]
-# 1. Create a virtual environment
-python -m venv .venv
-source .venv/bin/activate
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Build the ground truth
-python scripts/build_ground_truth.py --data-root data --ground-root ground_truth_result \
-  --datasets flight-2 flight-4 fortune geo premier presidents world movies
-
-# 4. Verify the evaluation (baseline == ground)
-python scripts/galois_eval.py --ground ground_truth_result --submissions ground_truth_result \
-  --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 --cell-metric similarity --tuple-metric constraint
-\end{lstlisting}
 
 \end{document}
