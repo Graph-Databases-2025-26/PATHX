@@ -185,7 +185,7 @@ python src/pipelines/ingest_all.py --datasets <datasetname1> <datasetname2> # by
 python src/pipelines/ingest_all.py # all
 
 # 5. To process queries
-python src/pipelines/run_queries.py     --datasets <datasetname1> <datasetname2>
+python -m src.pipelines.run_queries
 
 # 6. To export EXPLAIN
 python src/pipelines/explain_text.py    --datasets <datasetname1> <datasetname2> # to .txt
