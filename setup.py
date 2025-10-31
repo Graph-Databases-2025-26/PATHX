@@ -33,7 +33,7 @@ def setup_environment():
 def build_ground_truth():
     print("\n Building ground truth...")
     run([
-        str(PY), "src/pipelines/common.py",
+        str(PY), "scripts/build_ground_truth.py",
         "--data-root", "data",
         "--ground-root", "ground_truth_result",
         "--datasets", "flight-2", "flight-4", "fortune", "geo",
@@ -42,7 +42,7 @@ def build_ground_truth():
 
 def ingest_datasets():
     print("\n Ingesting all datasets to database...")
-    run([str(PY), "src/pipelines/sql_baseline.py"])
+    run([str(PY), "src/db/ingest_all.py"])
 
 def process_queries():
     print("\n Processing queries...")
