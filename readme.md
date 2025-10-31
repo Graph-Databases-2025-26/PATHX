@@ -104,14 +104,14 @@ pip install -r requirements.txt
 
 ## 1. Build the ground truth
 ```bash
-python scripts/build_ground_truth.py --data-root data --ground-root ground_truth_result \
+python scripts/build_ground_truth.py --data-root data --ground-root ground \
   --datasets flight-2 flight-4 fortune geo premier presidents world movies
 ```
 
 ## 2. To ingest the datasets to database
 ```bash
-python src/pipelines/ingest_all.py --datasets <datasetname1> <datasetname2> # by name
-python src/pipelines/ingest_all.py # all
+python src/db/ingest_all.py --datasets <datasetname1> <datasetname2> # by name
+python src/db/ingest_all.py # all
 ```
 
 ## 3. To process queries
@@ -129,7 +129,7 @@ python -m src.pipelines.run_explain_all
 python scripts/galois_eval.py --ground ground --submissions submissions \
   --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 --cell-metric similarity --tuple-metric constraint
 
-  python galois_eval.py --ground ground --submissions submissions \
+  python scripts/galois_eval.py --ground ground --submissions submissions \
   --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 \
   --cell-metric similarity --tuple-metric constraint --overall --format table
 ```
