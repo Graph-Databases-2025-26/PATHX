@@ -188,8 +188,10 @@ python src/pipelines/ingest_all.py # all
 python -m src.pipelines.run_queries
 
 # 6. To export EXPLAIN
-python src/pipelines/explain_text.py    --datasets <datasetname1> <datasetname2> # to .txt
-python src/pipelines/explain_json.py    --datasets <datasetname1> <datasetname2> # to .json
+python src/pipelines/db_explain.py    --datasets <datasetname1> <datasetname2>  --format txt --db-path ./database.duckdb # to .txt
+python src/pipelines/db_explain.py    --datasets <datasetname1> <datasetname2> --format json --db-path ./database.duckdb # to .json
+#OR
+python src/pipelines/db_explain.py    --datasets <datasetname1> <datasetname2> --format both --db-path ./database.duckdb # to .json and .txt
 
 # 7. Verify the evaluation (baseline == ground)
 python scripts/galois_eval.py --ground ground --submissions submissions \
