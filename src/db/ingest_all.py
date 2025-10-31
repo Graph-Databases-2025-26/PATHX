@@ -1,10 +1,10 @@
-# src/pipelines/ingest_all.py
+
 from __future__ import annotations
 import argparse
 from pathlib import Path
 import duckdb
 
-from db.duckdb_client import connect_dataset_db, ingest_dataset
+from duckdb_client import connect_dataset_db, ingest_dataset
 
 DATA = Path("data")
 
@@ -49,7 +49,7 @@ def main():
     print(f"[INFO] Datasets to ingest: {', '.join(datasets)}")
 
     for ds in datasets:
-        ingest_one(ds, schema=args.schema, persist_db=not args.no-persist)
+        ingest_one(ds, schema=args.schema, persist_db=not args.no_persist)
 
 if __name__ == "__main__":
     main()

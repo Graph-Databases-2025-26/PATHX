@@ -47,20 +47,20 @@ def init_schema(con: duckdb.DuckDBPyConnection, schema: str = "target", clean: b
     con.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}";')
 
 
-def ingest_dataset(con: duckdb.DuckDBPyConnection, dataset_dir: Path, schema: str = "target") -> None:
-    """
-    Initialize all tables for a dataset.
+def _table_exists(con, schema: str, name: str) -> bool:
+    row = con.execute(
+        "SELECT 1 FROM information_schema.tables WHERE table_schema=? AND table_name=?",
+        [schema, name]
+    ).fetchone()
+    return row is not None
 
-    """
-    # Always start from a clean schema
+def ingest_dataset(con: duckdb.DuckDBPyConnection, dataset_dir: Path, schema: str = "target") -> None:
     init_schema(con, schema=schema, clean=True)
 
-    # --- Option 1: run provided ingest_*.sql ---
     ingest_files = sorted(dataset_dir.glob("ingest*.sql")) or sorted(dataset_dir.glob("ingest_*.sql"))
     if ingest_files:
         _exec_sql_file(con, ingest_files[0], workdir=dataset_dir)
     else:
-        # --- Option 2: auto-load all CSV files into target.<stem> ---
         for csv in sorted(dataset_dir.glob("*.csv")):
             table = csv.stem
             con.execute(
@@ -69,8 +69,10 @@ def ingest_dataset(con: duckdb.DuckDBPyConnection, dataset_dir: Path, schema: st
                 [str(csv)]
             )
 
-    # --- Optional dataset-specific aliases ---
-    # Some SQL queries refer to slightly different table names
+    # ---- Dataset-specific compatibility aliases (SAFE) ----
     if dataset_dir.name == "fortune":
-        # CSV is fortune1000_2024, but SQL uses fortune_2024
-        con.execute(f'CREATE OR REPLACE VIEW "{schema}".fortune_2024 AS SELECT * FROM "{schema}".fortune1000_2024')
+        # Case A: CSV fallback created target.fortune1000_2024, queries expect fortune_2024
+        if _table_exists(con, schema, "fortune1000_2024") and not _table_exists(con, schema, "fortune_2024"):
+            con.execute(f'CREATE OR REPLACE VIEW "{schema}".fortune_2024 AS SELECT * FROM "{schema}".fortune1000_2024')
+        # Case B: ingest already created target.fortune_2024 -> nothing to do
+        # (If someone did the opposite mapping, you can add the reverse alias here if ever needed.)
