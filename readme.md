@@ -100,9 +100,9 @@ source .venv/bin/activate     # macOS / Linux
 ```bash
 pip install -r requirements.txt
 ```
-# 🛠️ Commands and functions
+## 🛠️ Commands and functions
 
-## 🧭 Full Automated Pipeline
+### 🧭 Full Automated Pipeline
 Run everything end-to-end with a single command 👇
 ```bash
 python scripts/run_all.py
@@ -114,26 +114,26 @@ python scripts/run_all.py --datasets movies world        # subset
 python scripts/run_all.py --skip-explain                 # skip EXPLAIN
 python scripts/run_all.py --baseline                     # compare ground vs ground
 ```
-## 🧩 Manually:
+### 🧩 Manually:
 
-## 1. Build the ground truth
+#### 1. Build the ground truth
 ```bash
 python scripts/build_ground_truth.py --data-root data --ground-root ground \
   --datasets flight-2 flight-4 fortune geo premier presidents world movies
 ```
 
-## 2. To ingest the datasets to database
+#### 2. To ingest the datasets to database
 ```bash
 python src/db/ingest_all.py --datasets <datasetname1> <datasetname2> # by name
 python src/db/ingest_all.py # all
 ```
 
-## 3. To process queries
+#### 3. To process queries
 ```bash
 python -m src.pipelines.run_queries
 ```
 
-## 4. To export EXPLAIN
+#### 4. To export EXPLAIN
 ```bash
 python -m src.pipelines.run_explain_all
 ```
@@ -146,7 +146,7 @@ results/
 └─ explain_txt/<DATASET>/queryN__analyze.txt
 ```
 
-## 5. Verify the evaluation (baseline == ground)
+#### 5. Verify the evaluation (baseline == ground)
 ```bash
 python scripts/galois_eval.py --ground ground --submissions submissions \
   --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 --cell-metric similarity --tuple-metric constraint
@@ -158,7 +158,7 @@ or formatted output:
   --cell-metric similarity --tuple-metric constraint --overall --format table
 ```
 
-# 📂 Project Structure
+## 📂 Project Structure
 ```bash
 pathX/
 ├── data/                      # all input datasets (CSV, SQL, JSON)
