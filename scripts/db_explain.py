@@ -137,7 +137,7 @@ def extract_timing_info(plan_text: str):
     return timing_info if timing_info else None
 
 
-def explain_query_file(db_path: Path, query_file: Path, output_dir: Path = None, analyze: bool = False):
+def explain_query_file(db_path: Path, query_file: Path, output_dir: Path = None, analyze: bool = False, export_format: str):
     """
     Generate execution plans for all queries in a SQL file.
     
@@ -168,26 +168,31 @@ def explain_query_file(db_path: Path, query_file: Path, output_dir: Path = None,
         result = explain_query(con, sql, analyze=analyze)
         results[f"query{i}"] = result
         
-        if result["success"]:
-            print(f"[OK] Query {i}: Plan generated")
-        else:
+        if not result["success"]:
             print(f"[ERROR] Query {i}: {result.get('error', 'Unknown error')}")
-        
-        # Save to file if output directory is specified
+            continue
+
         if output_dir:
             output_dir.mkdir(parents=True, exist_ok=True)
-            output_file = output_dir / f"explain_query{i}.json"
-            output_file.write_text(
-                json.dumps(result, ensure_ascii=False, indent=2),
-                encoding="utf-8"
-            )
-            print(f"[SAVED] {output_file}")
+
+            # JSON export
+            if export_format in ("json", "both"):
+                json_path = output_dir / f"explain_query{i}.json"
+                json_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+                print(f"[SAVED] {json_path}")
+
+            # TXT export
+            if export_format in ("txt", "both"):
+                txt_path = output_dir / f"explain_query{i}.txt"
+                txt_path.write_text(result.get("plan_text", "[No plan available]"), encoding="utf-8")
+                print(f"[SAVED] {txt_path}")
+        
     
     con.close()
     return results
 
 
-def explain_single_query(db_path: Path, sql: str, output_file: Path = None, analyze: bool = False):
+def explain_single_query(db_path: Path, sql: str, output_dir: Path = None, analyze: bool = False, export_format: str = "json"):
     """
     Generate execution plan for a single SQL query.
     
@@ -215,19 +220,27 @@ def explain_single_query(db_path: Path, sql: str, output_file: Path = None, anal
     else:
         print(f"[ERROR] {result.get('error', 'Unknown error')}")
     
-    if output_file:
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        output_file.write_text(
-            json.dumps(result, ensure_ascii=False, indent=2),
-            encoding="utf-8"
-        )
-        print(f"\n[SAVED] Results saved to: {output_file}")
+    if output_dir:
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        if export_format in ("json", "both"):
+            json_file = output_dir / "explain_single.json"
+            json_file.write_text(
+                json.dumps(result, ensure_ascii=False, indent=2),
+                encoding="utf-8"
+            )
+            print(f"[SAVED] {json_file}")
+
+        if export_format in ("txt", "both"):
+            txt_file = output_dir / "explain_single.txt"
+            txt_file.write_text(result.get("plan_text", "[No plan available]"), encoding="utf-8")
+            print(f"[SAVED] {txt_file}")
     
     con.close()
     return result
 
 
-def compare_queries(db_path: Path, queries: list, output_file: Path = None):
+def compare_queries(db_path: Path, queries: list, output_dir: Path = None):
     """
     Compare execution plans for multiple queries.
     
@@ -259,13 +272,24 @@ def compare_queries(db_path: Path, queries: list, output_file: Path = None):
     
     con.close()
     
-    if output_file:
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        output_file.write_text(
-            json.dumps(comparison, ensure_ascii=False, indent=2),
-            encoding="utf-8"
-        )
-        print(f"\n[SAVED] Comparison saved to: {output_file}")
+    if output_dir:
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        if export_format in ("json", "both"):
+            json_file = output_dir / "comparison.json"
+            json_file.write_text(
+                json.dumps(comparison, ensure_ascii=False, indent=2),
+                encoding="utf-8"
+            )
+            print(f"[SAVED] {json_file}")
+
+        if export_format in ("txt", "both"):
+            txt_file = output_dir / "comparison.txt"
+            txt_summary = []
+            for q in comparison["queries"]:
+                txt_summary.append(f"Query {q['query_number']}:\n{q['plan']}\n")
+            txt_file.write_text("\n".join(txt_summary), encoding="utf-8")
+            print(f"[SAVED] {txt_file}")
     
     return comparison
 
@@ -285,8 +309,9 @@ def main():
                     help="Use EXPLAIN ANALYZE (executes query and shows actual timings)")
     
     # Output options
-    ap.add_argument("--output-dir", type=Path, help="Directory to save JSON results")
-    ap.add_argument("--output-file", type=Path, help="File to save single query result")
+    ap.add_argument("--output-dir", type=Path, help="Directory to save results")
+    ap.add_argument("--format", choices=["txt", "json", "both"], default="json",
+                    help="Export format: txt, json, or both")
     ap.add_argument("--print-plan", action="store_true", help="Print execution plan to stdout")
     
     args = ap.parse_args()
@@ -298,7 +323,8 @@ def main():
                 db_path=args.db_path,
                 query_file=args.query_file,
                 output_dir=args.output_dir,
-                analyze=args.analyze
+                analyze=args.analyze,
+                export_format=args.format
             )
             
             if args.print_plan:
