@@ -194,4 +194,8 @@ python src/pipelines/explain_json.py    --datasets <datasetname1> <datasetname2>
 # 7. Verify the evaluation (baseline == ground)
 python scripts/galois_eval.py --ground ground --submissions submissions \
   --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 --cell-metric similarity --tuple-metric constraint
+
+  python galois_eval.py --ground ground --submissions submissions \
+  --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 \
+  --cell-metric similarity --tuple-metric constraint --overall --format table
 ```
