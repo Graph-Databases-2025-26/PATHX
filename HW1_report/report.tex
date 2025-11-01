@@ -31,7 +31,7 @@
   columns=fullflexible
 }
 
-\title{PathX- HW1 Report}
+\title{PathX - HW1 Report}
 \author{Juliette Tonneau \quad Minseok Kim \quad Bita Khashechian \quad Danil Smirnov\\[4pt]
 \textbf{Graph Databases — Gianmaria Silvello}}
 
@@ -44,7 +44,7 @@
 The goal is to build a \textbf{system that integrates an SQL database} with \textbf{a Large Language Model (LLM)}, enabling natural language query processing and query optimization inspired by the \emph{Galois} paper presented in the course.
 
 
-\section{GALOIS Paper: Overview and Key Insights}
+\section{Overview and Key Insights from the GALOIS Paper}
 
 The SIGMOD 2025 paper \emph{``Logical and Physical Optimizations for SQL Query Execution over Large Language Models''} presents \textbf{Galois}, a system that enables SQL query execution directly over Large Language Models (LLMs). The observation is that, although LLMs are capable of answering declarative queries and extracting structured data from unstructured sources, their performance declines with complex queries, often resulting in incomplete or inaccurate outputs. Existing database optimization techniques target first cost or latency reduction without adequately addressing the challenge of ensuring result quality.
 
@@ -142,7 +142,7 @@ Files provided by tutor for evaluation and etc.
 \item[\texttt{/src}]%
 Project’s core codebase, divided into the modules below:
   \begin{itemize}
-    \item \texttt{/db} — For Initialisation connection with DuckDB and for ingestion csv files to duckdb.
+    \item \texttt{/db} — For initializing the DuckDB connection and ingesting CSV files into DuckDB.
     \item \texttt{/llm} — For prompting and connecting to LLM.
     \item \texttt{/pipelines} — For running queries in json, implementing EXPLAIN and saving the result in .txt format for human inspection and .json for machine processing. Also initial baselines for future stages.
     \item \texttt{/utils} — Utilities such as loggers to make the program’s behavior observable and timer for compare runs and report the evaluation.
@@ -165,7 +165,7 @@ Holds the test scripts, for both small parts and full flows.
 
 \section{Setup and Implementation}
 The \texttt{setup.py} script automates the complete setup and evaluation process of the project. 
-It performs these several sequential steps:
+It performs the following steps:
 
 \begin{enumerate}
     \item \textbf{Environment setup:} Creates a Python virtual environment and installs all dependencies from \texttt{requirements.txt}.
@@ -176,7 +176,6 @@ It performs these several sequential steps:
 \end{enumerate}
 
 The \texttt{main()} function calls all these steps in order, providing a project initialization and validation pipeline.
-
 
 
 \end{document}
