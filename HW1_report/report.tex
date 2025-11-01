@@ -91,6 +91,25 @@ This stage focuses on:
     \end{enumerate}
 \end{itemize}
 
+\section{Technology Stack}
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{@{}llp{7cm}@{}}
+    \toprule
+    \textbf{Component} & \textbf{Tool / Library} & \textbf{Description} \\
+    \midrule
+    Language & Python 3.11+ & Main programming language \\
+    Database & DuckDB & Lightweight, file-based SQL DB optimized for analytics \\
+    LLM (later) & IBM WatsonX.ai & LLM integration for later stages \\
+    Libraries & \texttt{duckdb}, \texttt{pandas}, \texttt{sqlglot}, \texttt{python-dotenv} & Core Python dependencies \\
+    IDE & Visual Studio Code & Main development environment \\
+    \bottomrule
+  \end{tabular}
+  \caption{Technology stack.}
+\end{table}
+
+
 \section{Tools and Libraries}
 \begin{itemize}
   \item \textbf{numpy} -- numerical support for pandas / data processing.
@@ -125,7 +144,7 @@ Project’s core codebase, divided into the modules below:
   \begin{itemize}
     \item \texttt{/db} — For Initialisation connection with DuckDB and for ingestion csv files to duckdb.
     \item \texttt{/llm} — For prompting and connecting to LLM.
-    \item \texttt{/pipelines} — For running queries in json, implementing EXPLAIN command and initial baselines for future stages.
+    \item \texttt{/pipelines} — For running queries in json, implementing EXPLAIN and saving the result in .txt format for human inspection and .json for machine processing. Also initial baselines for future stages.
     \item \texttt{/utils} — Utilities such as loggers to make the program’s behavior observable and timer for compare runs and report the evaluation.
   \end{itemize}
 
@@ -144,25 +163,19 @@ Holds the test scripts, for both small parts and full flows.
 
 \end{description}
 
-\section{Technology Stack}
+\section{Setup and Implementation}
+The \texttt{setup.py} script automates the complete setup and evaluation process of the project. 
+It performs these several sequential steps:
 
-\begin{table}[h]
-  \centering
-  \begin{tabular}{@{}llp{7cm}@{}}
-    \toprule
-    \textbf{Component} & \textbf{Tool / Library} & \textbf{Description} \\
-    \midrule
-    Language & Python 3.11+ & Main programming language \\
-    Database & DuckDB & Lightweight, file-based SQL DB optimized for analytics \\
-    LLM (later) & IBM WatsonX.ai & LLM integration for later stages \\
-    Libraries & \texttt{duckdb}, \texttt{pandas}, \texttt{sqlglot}, \texttt{python-dotenv} & Core Python dependencies \\
-    IDE & Visual Studio Code & Main development environment \\
-    \bottomrule
-  \end{tabular}
-  \caption{Technology stack.}
-\end{table}
+\begin{enumerate}
+    \item \textbf{Environment setup:} Creates a Python virtual environment and installs all dependencies from \texttt{requirements.txt}.
+    \item \textbf{Data ingestion:} Loads all datasets into the database.
+    \item \textbf{Query processing:} Executes all predefined queries.
+    \item \textbf{Explain export:} Generates and exports EXPLAIN results in JSON format.
+    \item \textbf{Evaluation:} Compares system outputs with the ground truth (provided by tutor) to verify accuracy.
+\end{enumerate}
 
-\section{Implementation and Setup}
+The \texttt{main()} function calls all these steps in order, providing a project initialization and validation pipeline.
 
 
 
