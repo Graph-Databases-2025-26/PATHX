@@ -90,47 +90,85 @@ source .venv/bin/activate     # macOS / Linux
 ```bash
 pip install -r requirements.txt
 ```
+# 🛠️ Commands and functions
 
-## 4️⃣ Initialize DuckDB and load data
-
+## 🧭 Full Automated Pipeline
+Run everything end-to-end with a single command 👇
 ```bash
-python scripts/init_duckdb.py
+python scripts/run_all.py
 ```
 
-This creates db/sample.duckdb and loads data from data/customers.csv.
+Options:
+```bash
+python scripts/run_all.py --datasets movies world        # subset
+python scripts/run_all.py --skip-explain                 # skip EXPLAIN
+python scripts/run_all.py --baseline                     # compare ground vs ground
+```
+## 🧩 Manually:
 
 ## ⚙️ Typical usage (manual commands)
 
 ```bash
-# 1. Create a virtual environment
-python -m venv .venv
-source .venv/bin/activate
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Build the ground truth
-python scripts/build_ground_truth.py --data-root data --ground-root ground_truth_result \
+python scripts/build_ground_truth.py --data-root data --ground-root ground \
   --datasets flight-2 flight-4 fortune geo premier presidents world movies
 
-# 4. To ingest the datasets to database
-python src/pipelines/ingest_all.py --datasets <datasetname1> <datasetname2> # by name
-python src/pipelines/ingest_all.py # all
+## 2. To ingest the datasets to database
+```bash
+python src/db/ingest_all.py --datasets <datasetname1> <datasetname2> # by name
+python src/db/ingest_all.py # all
+```
 
 # 5. To process queries
 python -m src.pipelines.run_queries
+```
 
-# 6. To export EXPLAIN
-python src/pipelines/db_explain.py    --datasets <datasetname1> <datasetname2>  --format txt --db-path ./database.duckdb # to .txt
-python src/pipelines/db_explain.py    --datasets <datasetname1> <datasetname2> --format json --db-path ./database.duckdb # to .json
-#OR
-python src/pipelines/db_explain.py    --datasets <datasetname1> <datasetname2> --format both --db-path ./database.duckdb # to .json and .txt
+## 4. To export EXPLAIN
+```bash
+python -m src.pipelines.run_explain_all
+```
+Results are stored under:
+```bash
+results/
+├─ explain_json/<DATASET>/queryN__explain.json
+├─ explain_json/<DATASET>/queryN__analyze.json
+├─ explain_txt/<DATASET>/queryN__explain.txt
+└─ explain_txt/<DATASET>/queryN__analyze.txt
+```
 
-# 7. Verify the evaluation (baseline == ground)
+## 5. Verify the evaluation (baseline == ground)
+```bash
 python scripts/galois_eval.py --ground ground --submissions submissions \
   --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 --cell-metric similarity --tuple-metric constraint
-
-  python galois_eval.py --ground ground --submissions submissions \
+```
+or formatted output:
+```bash
+  python scripts/galois_eval.py --ground ground --submissions submissions \
   --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 \
   --cell-metric similarity --tuple-metric constraint --overall --format table
+```
+
+# 📂 Project Structure
+```bash
+pathX/
+├── data/                      # all input datasets (CSV, SQL, JSON)
+├── db/                        # generated DuckDB databases per dataset
+├── ground_truth_result/       # reference query outputs
+├── results/
+│   ├── explain_json/          # JSON plans (EXPLAIN / ANALYZE)
+│   └── explain_txt/           # text-based EXPLAIN trees
+├── submissions/               # generated query results
+│
+├── scripts/                   # CLI scripts and automation tools
+│   ├── build_ground_truth.py
+│   ├── galois_eval.py
+│   ├── run_all.py
+│   └── ...
+│
+├── src/
+│   ├── db/                    # database clients (DuckDB)
+│   ├── pipelines/             # ingestion, queries, explain pipelines
+│   ├── utils/                 # logging, explain_export, etc.
+│   └── ...
+│
+└── requirements.txt
 ```

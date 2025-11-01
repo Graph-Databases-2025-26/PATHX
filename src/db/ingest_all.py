@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 import duckdb
 
-from ..db.duckdb_client import connect_dataset_db, ingest_dataset
+from duckdb_client import connect_dataset_db, ingest_dataset
 
 DATA = Path("data")
 
