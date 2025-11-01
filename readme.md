@@ -65,9 +65,10 @@ Later stages plug in the LLM and replace some scans with **LLMScan** / **Filter-
 /submissions  # final JSONs, EXPLAIN outputs
 /test         # unit / integration tests
 
+```
 ----
 
-## 🛠️ Installation and Setup
+### 🛠️ Installation and Setup
 
 ## 1️⃣ Clone the repository
 
