@@ -1,14 +1,5 @@
 [
   {
-    "capital": "helena"
-  },
-  {
-    "capital": "carson city"
-  },
-  {
-    "capital": "trenton"
-  },
-  {
     "capital": "montgomery"
   },
   {
@@ -18,34 +9,16 @@
     "capital": "hartford"
   },
   {
+    "capital": "helena"
+  },
+  {
+    "capital": "carson city"
+  },
+  {
+    "capital": "trenton"
+  },
+  {
     "capital": "columbia"
-  },
-  {
-    "capital": "indianapolis"
-  },
-  {
-    "capital": "topeka"
-  },
-  {
-    "capital": "st. paul"
-  },
-  {
-    "capital": "pierre"
-  },
-  {
-    "capital": "denver"
-  },
-  {
-    "capital": "tallahassee"
-  },
-  {
-    "capital": "lansing"
-  },
-  {
-    "capital": "bismarck"
-  },
-  {
-    "capital": "charleston"
   },
   {
     "capital": "springfield"
@@ -58,6 +31,39 @@
   },
   {
     "capital": "montpelier"
+  },
+  {
+    "capital": "boise"
+  },
+  {
+    "capital": "jackson"
+  },
+  {
+    "capital": "providence"
+  },
+  {
+    "capital": "sacramento"
+  },
+  {
+    "capital": "honolulu"
+  },
+  {
+    "capital": "frankfort"
+  },
+  {
+    "capital": "baton rouge"
+  },
+  {
+    "capital": "columbus"
+  },
+  {
+    "capital": "oklahoma city"
+  },
+  {
+    "capital": "salem"
+  },
+  {
+    "capital": "olympia"
   },
   {
     "capital": "phoenix"
@@ -78,55 +84,16 @@
     "capital": "concord"
   },
   {
-    "capital": "austin"
-  },
-  {
-    "capital": "boise"
-  },
-  {
-    "capital": "jackson"
-  },
-  {
-    "capital": "little rock"
-  },
-  {
-    "capital": "atlanta"
-  },
-  {
-    "capital": "jefferson city"
-  },
-  {
-    "capital": "sacramento"
-  },
-  {
-    "capital": "honolulu"
-  },
-  {
-    "capital": "baton rouge"
-  },
-  {
-    "capital": "columbus"
-  },
-  {
-    "capital": "oklahoma city"
-  },
-  {
-    "capital": "olympia"
-  },
-  {
     "capital": "harrisburg"
   },
   {
     "capital": "nashville"
   },
   {
+    "capital": "austin"
+  },
+  {
     "capital": "salt lake city"
-  },
-  {
-    "capital": "frankfort"
-  },
-  {
-    "capital": "salem"
   },
   {
     "capital": "dover"
@@ -135,21 +102,54 @@
     "capital": "boston"
   },
   {
-    "capital": "richmond"
-  },
-  {
-    "capital": "cheyenne"
-  },
-  {
-    "capital": "providence"
-  },
-  {
     "capital": "santa fe"
   },
   {
     "capital": "raleigh"
   },
   {
+    "capital": "richmond"
+  },
+  {
     "capital": "madison"
+  },
+  {
+    "capital": "cheyenne"
+  },
+  {
+    "capital": "denver"
+  },
+  {
+    "capital": "tallahassee"
+  },
+  {
+    "capital": "lansing"
+  },
+  {
+    "capital": "bismarck"
+  },
+  {
+    "capital": "charleston"
+  },
+  {
+    "capital": "little rock"
+  },
+  {
+    "capital": "atlanta"
+  },
+  {
+    "capital": "indianapolis"
+  },
+  {
+    "capital": "topeka"
+  },
+  {
+    "capital": "st. paul"
+  },
+  {
+    "capital": "jefferson city"
+  },
+  {
+    "capital": "pierre"
   }
 ]

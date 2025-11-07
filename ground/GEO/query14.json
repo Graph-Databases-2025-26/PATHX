@@ -3,40 +3,16 @@
     "lake_name": "lake okeechobee"
   },
   {
-    "lake_name": "great salt lake"
+    "lake_name": "lake michigan"
   },
   {
-    "lake_name": "red lake"
+    "lake_name": "great salt lake"
   },
   {
     "lake_name": "iliamna lake"
   },
   {
     "lake_name": "lake saint clair"
-  },
-  {
-    "lake_name": "lake michigan"
-  },
-  {
-    "lake_name": "teshekpuk lake"
-  },
-  {
-    "lake_name": "lake pontchartrain"
-  },
-  {
-    "lake_name": "lake ontario"
-  },
-  {
-    "lake_name": "lake erie"
-  },
-  {
-    "lake_name": "lake champlain"
-  },
-  {
-    "lake_name": "rainy lake"
-  },
-  {
-    "lake_name": "lake huron"
   },
   {
     "lake_name": "becharof lake"
@@ -48,6 +24,30 @@
     "lake_name": "lake of the woods"
   },
   {
+    "lake_name": "lake erie"
+  },
+  {
+    "lake_name": "rainy lake"
+  },
+  {
+    "lake_name": "lake champlain"
+  },
+  {
     "lake_name": "lake superior"
+  },
+  {
+    "lake_name": "lake ontario"
+  },
+  {
+    "lake_name": "teshekpuk lake"
+  },
+  {
+    "lake_name": "lake pontchartrain"
+  },
+  {
+    "lake_name": "lake huron"
+  },
+  {
+    "lake_name": "red lake"
   }
 ]

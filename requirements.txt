@@ -7,3 +7,6 @@ requests>=2.31.0
 rapidfuzz
 python-Levenshtein
 orjson
+
+ibm-watsonx-ai>=1.1.9
+python-dotenv>=1.0.1
