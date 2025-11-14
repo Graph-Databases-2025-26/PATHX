@@ -11,8 +11,8 @@ results/
 submissions/
 data/
 ground/
+db/
 *.duckdb
-
 # LaTeX 
 *.aux
 .fdb_latexmk
