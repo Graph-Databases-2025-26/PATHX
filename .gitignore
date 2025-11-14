@@ -15,9 +15,6 @@ ground/
 db/
 *.duckdb
 
-# Tests
-test_watsonx.py
-
 # LaTeX 
 *.aux
 .fdb_latexmk
