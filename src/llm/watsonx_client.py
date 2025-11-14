@@ -26,7 +26,7 @@ def build_model(
     api_key   = _env("WATSONX_API_KEY")
     url       = _env("WATSONX_URL")
     project_id = os.getenv("WATSONX_PROJECT_ID")
-    space_id   = os.getenv("WATSONX_SPACE_ID")  # use one of project_id / space_id
+    space_id   = os.getenv("WATSONX_SPACE_ID") 
 
     model_id   = model_id or os.getenv("WATSONX_MODEL_ID", "ibm/granite-20b-multilingual")
     temperature = float(temperature if temperature is not None else os.getenv("WATSONX_TEMPERATURE", 0.2))

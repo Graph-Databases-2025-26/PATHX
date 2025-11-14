@@ -9,10 +9,15 @@ env/
 *.json
 results/
 submissions/
+sql_baseline_results/
 data/
 ground/
 db/
 *.duckdb
+
+# Tests
+test_watsonx.py
+
 # LaTeX 
 *.aux
 .fdb_latexmk
