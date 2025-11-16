@@ -5,6 +5,7 @@ import argparse
 import json
 import logging
 import re
+import time
 from pathlib import Path
 from typing import List, Any
 
@@ -146,6 +147,7 @@ SQL:
 {sql}
 """.strip()
 
+
 def build_prompt(strategy: str, dataset: str, sql: str) -> str:
     strategies = {
         "strict_json": build_prompt_strict_json,
@@ -159,6 +161,20 @@ def build_prompt(strategy: str, dataset: str, sql: str) -> str:
         raise ValueError(f"Unknown strategy: {strategy}")
     return strategies[strategy](dataset, sql)
 
+def _strip_markdown_fences(text: str) -> str:
+    text = text.strip()
+    if text.startswith("00\n\n"):
+        text = text[4:]
+    if text.startswith("```"):
+        # remove first block ```...<\n>
+        first_newline = text.find("\n")
+        if first_newline != -1:
+            text = text[first_newline+1:]
+        # remove last ```
+        last_fence = text.rfind("```")
+        if last_fence != -1:
+            text = text[:last_fence]
+    return text.strip()
 
 
 def _try_extract_json(text: str) -> Any:
@@ -168,6 +184,10 @@ def _try_extract_json(text: str) -> Any:
     2) heuristic: first '[' ... last ']'
     Fallback: return dict with error + raw text.
     """
+
+    # 0) cleanup markdown fences
+    text = _strip_markdown_fences(text)
+
     text = text.strip()
 
     # 1) direct parse
@@ -225,19 +245,34 @@ def run_sql_baseline_for_dataset(dataset: str, strategy: str) -> None:
 
     for i, sql in enumerate(sqls, start=1):
         logger.info(f"[{dataset}] Q{i}/{len(sqls)}")
-        prompt = build_prompt(strategy, dataset, sql)   # ⬅️ use strategy here
+        prompt = build_prompt(strategy, dataset, sql)
 
         try:
+            t0 = time.time()
             raw_answer = generate_text(prompt)
+            elapsed = time.time() - t0
         except Exception as e:
-            logger.error(f"[{dataset}] Q{i} – LLM call failed: {e}") 
+            logger.error(f"[{dataset}] Q{i} – LLM call failed: {e}")
             data = {"_error": str(e), "prompt": prompt}
         else:
             data = _try_extract_json(raw_answer)
 
+        # If model returned just an array → wrap into {"result_set": ...}
+        if isinstance(data, list):
+            data = {"result_set": data}
+        # Count as a one row result if dict without result_set returned
+        elif isinstance(data, dict) and "result_set" not in data:
+            data = {"result_set": [data]}
+
+        # Add time / tokens for GALOIS metrics
+        if isinstance(data, dict):
+            data.setdefault("tokens", None)           # tokens not tracked here
+            data["time"] = round(elapsed, 3)
+
         out_path = out_dir / f"query{i}.json"
         out_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         logger.info(f"[{dataset}] Q{i} → {out_path}")
+
 
 
 
@@ -261,7 +296,7 @@ def main() -> None:
     )
     ap.add_argument(
         "--strategy",
-        choices=["strict_json", "json_example", "constrained", "hidden_cot", "fewshot", "compact"],
+        choices=["strict_json", "json_example", "constrained", "hidden_cot", "fewshot", "compact", "result_set"],
         default="strict_json",
         help="Prompting strategy to use for the SQL baseline.",
     )
@@ -280,3 +315,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
