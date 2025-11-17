@@ -27,6 +27,35 @@ model = ModelInference(
     project_id=project_id
 )
 
+def _buil_prompt(nl_query: str) -> str:
+    return f"""
+    You receive a natural language query.
+    Your task is to Return ONLY a single JSON array that directly answers the question.
+    
+    STRICT RULES:
+    - Output MUST be valid JSON.
+    - Output MUST be ONLY a JSON array.
+    - DO NOT output explanations.
+    - DO NOT output examples.
+    - DO NOT output Query or Answer lines.
+    - DO NOT output markdown.
+    - DO NOT output code fences like ```json.
+    - DO NOT repeat the query.
+    - DO NOT continue generating after the JSON.
+    - The answer MUST be pure JSON and nothing else.
+    - Don't generate other queries or examples
+    
+    Requirements:
+    - The output MUST be a JSON array.
+    - Each element MUST be a JSON object.
+    - All objects MUST contain the exact same set of keys.
+    - Keys MUST be strings.
+    - Values MUST be either strings or numbers.
+    
+    Now answer this query by returning ONLY one JSON array that has one or more objects:
+    {nl_query}
+    """
+
 DATA = Path("data")
 SUB = Path("submissions")
 PROMPTS = Path("src/llm/prompts")
