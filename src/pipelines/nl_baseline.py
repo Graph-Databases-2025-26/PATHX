@@ -27,7 +27,7 @@ model = ModelInference(
     project_id=project_id
 )
 
-def _buil_prompt(nl_query: str) -> str:
+def _build_prompt(nl_query: str) -> str:
     return f"""
     You receive a natural language query.
     Your task is to Return ONLY a single JSON array that directly answers the question.
@@ -114,6 +114,15 @@ for folder in os.listdir(DATA):
 
                         if line and current_query is None:
                             current_query= line
+
+
+                        prompt = _build_prompt(current_query)
+                        response = model.generate(prompt=prompt)
+                    
+                        raw_output = response["results"][0]["generated_text"]
+                        
+                        data= _try_extract_json(raw_output)
+        
 # def run_dataset(client: WatsonXClient, ds: str):
 #     ds_dir = DATA / ds
 #     qfiles = sorted(ds_dir.glob("queries_*.sql"))
