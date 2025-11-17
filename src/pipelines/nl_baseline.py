@@ -1,11 +1,12 @@
 from ibm_watsonx_ai import APIClient
 from ibm_watsonx_ai import Credentials
 from ibm_watsonx_ai.foundation_models import ModelInference
+import google.generativeai as genai
 import json
 import os
 from typing import List, Dict
 
-
+#watsonx model
 api_key      = "EPt6NeFnd0N3t4TFu9b5ASqTEXZejOX-NHKyr5U5x4rw"
 project_id   = "9275c050-718b-4fc2-99a0-f9c14d1054e7"
 cloud_region = "us-south" 
@@ -15,7 +16,7 @@ creds = Credentials(
     url="https://us-south.ml.cloud.ibm.com"
 )
 
-model = ModelInference(
+model_watsonx = ModelInference(
     model_id="ibm/granite-3-3-8b-instruct",
     params={
         "temperature": 0,
@@ -26,6 +27,17 @@ model = ModelInference(
     credentials=creds,
     project_id=project_id
 )
+
+#Gemini model
+API_KEY = "AIzaSyB5bevTQvg-g42NayUHoMM6qBkP-zuv9FM"
+if not API_KEY:
+    raise RuntimeError("GEMINI_API_KEY is not set. Please export it in your environment.")
+
+genai.configure(api_key=API_KEY)
+
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+model_gemini = genai.GenerativeModel(MODEL_NAME)
+
 
 def _build_prompt(nl_query: str) -> str:
     return f"""
@@ -117,21 +129,25 @@ for folder in os.listdir(DATA):
 
 
                         prompt = _build_prompt(current_query)
-                        response = model.generate(prompt=prompt)
-                    
-                        raw_output = response["results"][0]["generated_text"]
-                        
-                        data= _try_extract_json(raw_output)
 
-                        json_path = os.path.join(SUB, capital_folder, f"{query_number}.json")
-                        os.makedirs(os.path.dirname(json_path), exist_ok=True)
-                        with open(json_path, "w", encoding="utf-8") as f:
-                            json.dump(
-                                data,
-                                f,
-                                indent=4,
-                                ensure_ascii=False
-                            )
+                        response_watsonx = model_watsonx.generate(prompt=prompt)
+                        raw_output_watsonx = response_watsonx["results"][0]["generated_text"]
+                        
+                        response_gemini = model_gemini.generate_content(prompt)
+                        raw_output_gemini= response_gemini.text
+                        print(raw_output_gemini)
+
+                        data= _try_extract_json(raw_output_watsonx)
+                        
+                        # json_path = os.path.join(SUB, capital_folder, f"{query_number}.json")
+                        # os.makedirs(os.path.dirname(json_path), exist_ok=True)
+                        # with open(json_path, "w", encoding="utf-8") as f:
+                        #     json.dump(
+                        #         data,
+                        #         f,
+                        #         indent=4,
+                        #         ensure_ascii=False
+                        #     )
 
         
 # def run_dataset(client: WatsonXClient, ds: str):
@@ -159,16 +175,16 @@ for folder in os.listdir(DATA):
 #         write_json(out_dir / f"query{i}.json", payload)
 #         print(f"[NL] {ds} query{i}: {len(rows)} rows, {payload['time']} s, tokens={payload['tokens']}")
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--datasets", nargs="*", required=True)
-    ap.add_argument("--model", default="watsonx-llm")
-    ap.add_argument("--temperature", type=float, default=0.0)
-    args = ap.parse_args()
+# def main():
+#     ap = argparse.ArgumentParser()
+#     ap.add_argument("--datasets", nargs="*", required=True)
+#     ap.add_argument("--model", default="watsonx-llm")
+#     ap.add_argument("--temperature", type=float, default=0.0)
+#     args = ap.parse_args()
 
-    client = WatsonXClient(cfg=LLMConfig(model=args.model, temperature=args.temperature))
-    for ds in args.datasets:
-        run_dataset(client, ds)
+#     client = WatsonXClient(cfg=LLMConfig(model=args.model, temperature=args.temperature))
+#     for ds in args.datasets:
+#         run_dataset(client, ds)
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
