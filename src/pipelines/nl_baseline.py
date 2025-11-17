@@ -56,6 +56,34 @@ def _buil_prompt(nl_query: str) -> str:
     {nl_query}
     """
 
+def _try_extract_json(text: str) -> List[Dict]:
+    
+    text = text.strip()
+
+    # 1) direct parse
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+
+    # 2) extract between first '[' and last ']'
+    start = text.find("[")
+    end = text.rfind("]")
+    if start != -1 and end != -1 and end > start:
+        candidate = text[start : end + 1]
+        try:
+            return json.loads(candidate)
+        except Exception:
+            # continue to fallback
+            pass
+
+    # 3) fallback object (won't evaluate well, but at least is JSON)
+    return [
+        {"_error": "failed_to_parse_json",
+        "raw_text": text,}
+            ]
+
+
 DATA = Path("data")
 SUB = Path("submissions")
 PROMPTS = Path("src/llm/prompts")
