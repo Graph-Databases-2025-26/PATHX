@@ -5,6 +5,7 @@ import google.generativeai as genai
 import json
 import os
 from typing import List, Dict
+import time
 
 #watsonx model
 api_key      = "EPt6NeFnd0N3t4TFu9b5ASqTEXZejOX-NHKyr5U5x4rw"
@@ -97,7 +98,7 @@ def _try_extract_json(text: str) -> List[Dict]:
 
 
 DATA = r"D:/GRAPH DATABASE/pathX/PathX/data"
-SUB = r"D:/GRAPH DATABASE/pathX/PathX/outputNL"
+SUB = r"D:/GRAPH DATABASE/pathX/PathX/nl-baseline-result"
 # PROMPTS = Path("src/llm/prompts")
 os.makedirs(SUB, exist_ok=True)
 
@@ -130,25 +131,62 @@ for folder in os.listdir(DATA):
 
                         prompt = _build_prompt(current_query)
 
+
+                        # Watsonx model
+                        startT_watsonx = time.time()
+
                         response_watsonx = model_watsonx.generate(prompt=prompt)
                         raw_output_watsonx = response_watsonx["results"][0]["generated_text"]
+                        data_from_watsonx= _try_extract_json(raw_output_watsonx)
+
+                        endT_watsonx = time.time()
+                        elapsedW = endT_watsonx - startT_watsonx
+                        tokensW=len(raw_output_watsonx.split())
+
+                        json_path_w = os.path.join(SUB, "watsonx", capital_folder, f"{query_number}.json")
+                        os.makedirs(os.path.dirname(json_path_w), exist_ok=True)
                         
+                        payloadW = {
+                            "result_set": data_from_watsonx,
+                            "tokens": tokensW,
+                            "time":elapsedW
+                        }
+                        with open(json_path_w, "w", encoding="utf-8") as f:
+                            json.dump(
+                                payloadW,
+                                f,
+                                indent=4,
+                                ensure_ascii=False
+                            )
+
+
+
+                        # Gemini model 
+                        startT_gemini = time.time()
+
                         response_gemini = model_gemini.generate_content(prompt)
                         raw_output_gemini= response_gemini.text
-                        print(raw_output_gemini)
+                        data_from_gemini= _try_extract_json(raw_output_gemini)
 
-                        data= _try_extract_json(raw_output_watsonx)
+                        endT_gemini = time.time()
+                        elapsedG = endT_gemini - startT_gemini
+                        tokensG=len(raw_output_gemini.split())
+
+                        json_path_m = os.path.join(SUB, "gemini", capital_folder, f"{query_number}.json")
+                        os.makedirs(os.path.dirname(json_path_m), exist_ok=True)
                         
-                        # json_path = os.path.join(SUB, capital_folder, f"{query_number}.json")
-                        # os.makedirs(os.path.dirname(json_path), exist_ok=True)
-                        # with open(json_path, "w", encoding="utf-8") as f:
-                        #     json.dump(
-                        #         data,
-                        #         f,
-                        #         indent=4,
-                        #         ensure_ascii=False
-                        #     )
-
+                        payloadG = {
+                            "result_set": data_from_gemini,
+                            "tokens": tokensG,
+                            "time":elapsedG
+                        }
+                        with open(json_path_m, "w", encoding="utf-8") as f:
+                            json.dump(
+                                payloadG,
+                                f,
+                                indent=4,
+                                ensure_ascii=False
+                            )
         
 # def run_dataset(client: WatsonXClient, ds: str):
 #     ds_dir = DATA / ds
