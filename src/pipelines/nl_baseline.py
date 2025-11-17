@@ -122,6 +122,17 @@ for folder in os.listdir(DATA):
                         raw_output = response["results"][0]["generated_text"]
                         
                         data= _try_extract_json(raw_output)
+
+                        json_path = os.path.join(SUB, capital_folder, f"{query_number}.json")
+                        os.makedirs(os.path.dirname(json_path), exist_ok=True)
+                        with open(json_path, "w", encoding="utf-8") as f:
+                            json.dump(
+                                data,
+                                f,
+                                indent=4,
+                                ensure_ascii=False
+                            )
+
         
 # def run_dataset(client: WatsonXClient, ds: str):
 #     ds_dir = DATA / ds
