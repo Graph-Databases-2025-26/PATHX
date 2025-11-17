@@ -7,12 +7,10 @@ import logging
 import os
 import re
 import time
+from importlib import import_module
 from pathlib import Path
-from typing import List, Any, Callable, Tuple
+from typing import List, Any, Callable
 
-from ..llm.azure_client import generate_text as azure_generate_text
-from ..llm.gemini_client import generate_text as gemini_generate_text
-from ..llm.watsonx_client import generate_text as watsonx_generate_text
 from .common import discover_datasets, read_queries
 
 logger = logging.getLogger(__name__)
@@ -20,11 +18,24 @@ logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
 DATA_ROOT = Path("data")
 OUT_ROOT = Path("sql_baseline_results")
-LLM_PROVIDERS: dict[str, Callable[[str], Any]] = {
-    "azure": azure_generate_text,
-    "gemini": gemini_generate_text,
-    "watsonx": watsonx_generate_text,
-}
+PROVIDER_CHOICES = ("azure", "gemini", "watsonx")
+
+
+def _load_provider(name: str) -> Callable[[str], Any]:
+    """
+    Lazily import the chosen provider so that missing creds for others
+    do not break the run. Returns the provider's generate_text callable.
+    """
+    try:
+        if name == "azure":
+            return import_module("src.llm.azure_client").generate_text
+        if name == "gemini":
+            return import_module("src.llm.gemini_client").generate_text
+        if name == "watsonx":
+            return import_module("src.llm.watsonx_client").generate_text
+    except Exception as e:
+        raise RuntimeError(f"Failed to initialize LLM provider '{name}': {e}")
+    raise ValueError(f"Unknown provider: {name}")
 
 def build_prompt_strict_json(dataset: str, sql: str) -> str:
     return f"""
@@ -317,7 +328,7 @@ def main() -> None:
     )
     ap.add_argument(
         "--provider",
-        choices=sorted(LLM_PROVIDERS.keys()),
+        choices=PROVIDER_CHOICES,
         default=os.getenv("LLM_PROVIDER", "watsonx"),
         help="LLM backend to use (default from LLM_PROVIDER env, falls back to watsonx).",
     )
@@ -325,7 +336,7 @@ def main() -> None:
     args = ap.parse_args()
 
     datasets = args.datasets or discover_datasets()
-    llm_fn = LLM_PROVIDERS[args.provider]
+    llm_fn = _load_provider(args.provider)
     logger.info(
         f"Running SQL baseline for datasets: {', '.join(datasets)} "
         f"with strategy={args.strategy} provider={args.provider}"
