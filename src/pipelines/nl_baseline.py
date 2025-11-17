@@ -84,11 +84,22 @@ def _try_extract_json(text: str) -> List[Dict]:
             ]
 
 
-DATA = Path("data")
-SUB = Path("submissions")
-PROMPTS = Path("src/llm/prompts")
+DATA = r"D:/GRAPH DATABASE/pathX/PathX/data"
+SUB = r"D:/GRAPH DATABASE/pathX/PathX/outputNL"
+# PROMPTS = Path("src/llm/prompts")
+os.makedirs(SUB, exist_ok=True)
 
 
+for folder in os.listdir(DATA):
+    capital_folder= folder.upper()
+    folder_path =os.path.join(DATA,folder)
+
+    if os.path.isdir(folder_path):
+        print(f"processing {folder} folder")
+
+    for file in os.listdir(folder_path):
+        if file.endswith(".txt"):
+            txt_file= os.path.join(folder_path, file)    
 
 # def run_dataset(client: WatsonXClient, ds: str):
 #     ds_dir = DATA / ds
