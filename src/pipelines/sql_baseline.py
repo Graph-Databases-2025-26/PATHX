@@ -307,11 +307,11 @@ def main() -> None:
     CLI entry point.
 
     Examples:
-        # run for all datasets discovered in ./data with default strategy
+        # run for all datasets discovered in ./data with default strategy and default model
         python -m src.pipelines.sql_baseline
 
-        # run only for movies and geo with a specific strategy
-        python -m src.pipelines.sql_baseline --datasets movies geo --strategy strict_json
+        # run only for movies and geo with a specific strategy and model
+        python -m src.pipelines.sql_baseline --datasets movies geo --strategy strict_json --provider gemini
     """
     ap = argparse.ArgumentParser(description="Run SQL baseline (Baseline 3) with select LLM backend.")
     ap.add_argument(
