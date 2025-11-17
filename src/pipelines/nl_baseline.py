@@ -101,6 +101,19 @@ for folder in os.listdir(DATA):
         if file.endswith(".txt"):
             txt_file= os.path.join(folder_path, file)    
 
+            with open(txt_file, "r", encoding="utf-8") as f:
+                    lines= f.readlines()
+        
+                    for line in lines :
+                        line= line.strip()
+
+                        if line.startswith("--query"):
+                            query_number= line.removeprefix("--")
+                            current_query= None
+                            continue
+
+                        if line and current_query is None:
+                            current_query= line
 # def run_dataset(client: WatsonXClient, ds: str):
 #     ds_dir = DATA / ds
 #     qfiles = sorted(ds_dir.glob("queries_*.sql"))
