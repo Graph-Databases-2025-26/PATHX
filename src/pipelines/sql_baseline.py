@@ -4,12 +4,15 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import re
 import time
 from pathlib import Path
-from typing import List, Any
+from typing import List, Any, Callable, Tuple
 
-from ..llm.watsonx_client import generate_text
+from ..llm.azure_client import generate_text as azure_generate_text
+from ..llm.gemini_client import generate_text as gemini_generate_text
+from ..llm.watsonx_client import generate_text as watsonx_generate_text
 from .common import discover_datasets, read_queries
 
 logger = logging.getLogger(__name__)
@@ -17,6 +20,11 @@ logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
 DATA_ROOT = Path("data")
 OUT_ROOT = Path("sql_baseline_results")
+LLM_PROVIDERS: dict[str, Callable[[str], Any]] = {
+    "azure": azure_generate_text,
+    "gemini": gemini_generate_text,
+    "watsonx": watsonx_generate_text,
+}
 
 def build_prompt_strict_json(dataset: str, sql: str) -> str:
     return f"""
@@ -162,6 +170,8 @@ def build_prompt(strategy: str, dataset: str, sql: str) -> str:
     return strategies[strategy](dataset, sql)
 
 def _strip_markdown_fences(text: str) -> str:
+    if text is None:
+        return ""
     text = text.strip()
     if text.startswith("00\n\n"):
         text = text[4:]
@@ -221,7 +231,7 @@ def _dataset_dir(name: str) -> Path:
 
 # ---------- core logic ----------
 
-def run_sql_baseline_for_dataset(dataset: str, strategy: str) -> None:
+def run_sql_baseline_for_dataset(dataset: str, strategy: str, llm_fn: Callable[[str], Any]) -> None:
     """
     For a single dataset:
     - read queries_*.sql
@@ -247,34 +257,39 @@ def run_sql_baseline_for_dataset(dataset: str, strategy: str) -> None:
         logger.info(f"[{dataset}] Q{i}/{len(sqls)}")
         prompt = build_prompt(strategy, dataset, sql)
 
+        elapsed = None 
+
+        tokens = None
         try:
             t0 = time.time()
-            raw_answer = generate_text(prompt)
+            result = llm_fn(prompt)
             elapsed = time.time() - t0
+            if isinstance(result, (tuple, list)):
+                raw_answer = result[0]
+                tokens = result[1] if len(result) > 1 else None
+            else:
+                raw_answer = result
         except Exception as e:
             logger.error(f"[{dataset}] Q{i} – LLM call failed: {e}")
             data = {"_error": str(e), "prompt": prompt}
         else:
             data = _try_extract_json(raw_answer)
 
-        # If model returned just an array → wrap into {"result_set": ...}
+        # Full JSON wrapping
         if isinstance(data, list):
             data = {"result_set": data}
-        # Count as a one row result if dict without result_set returned
         elif isinstance(data, dict) and "result_set" not in data:
             data = {"result_set": [data]}
 
-        # Add time / tokens for GALOIS metrics
+        # Add time/tokens
         if isinstance(data, dict):
-            data.setdefault("tokens", None)           # tokens not tracked here
-            data["time"] = round(elapsed, 3)
+            data.setdefault("tokens", tokens)
+            # If LLM called successfully — write time, else None
+            data["time"] = round(elapsed, 3) if elapsed is not None else None
 
         out_path = out_dir / f"query{i}.json"
         out_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         logger.info(f"[{dataset}] Q{i} → {out_path}")
-
-
-
 
 def main() -> None:
     """
@@ -287,7 +302,7 @@ def main() -> None:
         # run only for movies and geo with a specific strategy
         python -m src.pipelines.sql_baseline --datasets movies geo --strategy strict_json
     """
-    ap = argparse.ArgumentParser(description="Run SQL baseline (Baseline 3) with Watsonx LLM.")
+    ap = argparse.ArgumentParser(description="Run SQL baseline (Baseline 3) with select LLM backend.")
     ap.add_argument(
         "--datasets",
         nargs="*",
@@ -297,22 +312,28 @@ def main() -> None:
     ap.add_argument(
         "--strategy",
         choices=["strict_json", "json_example", "constrained", "hidden_cot", "fewshot", "compact", "result_set"],
-        default="strict_json",
+        default="fewshot",
         help="Prompting strategy to use for the SQL baseline.",
+    )
+    ap.add_argument(
+        "--provider",
+        choices=sorted(LLM_PROVIDERS.keys()),
+        default=os.getenv("LLM_PROVIDER", "watsonx"),
+        help="LLM backend to use (default from LLM_PROVIDER env, falls back to watsonx).",
     )
 
     args = ap.parse_args()
 
     datasets = args.datasets or discover_datasets()
+    llm_fn = LLM_PROVIDERS[args.provider]
     logger.info(
         f"Running SQL baseline for datasets: {', '.join(datasets)} "
-        f"with strategy={args.strategy}"
+        f"with strategy={args.strategy} provider={args.provider}"
     )
 
     for ds in datasets:
-        run_sql_baseline_for_dataset(ds, args.strategy)
+        run_sql_baseline_for_dataset(ds, args.strategy, llm_fn)
 
 
 if __name__ == "__main__":
     main()
-
