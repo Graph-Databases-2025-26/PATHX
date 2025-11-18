@@ -16,9 +16,12 @@ database:
 
 io:
   data_dir: "./data"
-  prompts_dir: "./src/llm"
-  queries_dir: "./src/pipelines"
+  sql_queries_dir: "./data"
+  ml_queries_dir: "./src/pipelines"
   result_dir: "./submissions"
+  sql_result_dir: "./sql_baseline_results"
+  nl_result_dir: "./nl_baseline_results"
+  explan_result_dir: "./results"
 
 logging:
   level: "INFO"
