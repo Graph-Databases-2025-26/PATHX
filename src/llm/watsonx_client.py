@@ -32,7 +32,9 @@ _creds = Credentials(
 
 _params = {
     "max_new_tokens": 512,
-    "temperature": 0.2,
+    "temperature": 0,
+    "stop_sequences": ["]\n"],
+    "repetition_penalty": 1.2,
 }
 
 _model = ModelInference(
