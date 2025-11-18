@@ -202,38 +202,42 @@ def _try_extract_json(text: str) -> Any:
     """
     Try to parse JSON from the LLM output.
     1) direct json.loads
-    2) heuristic: first '[' ... last ']'
+    2) try every [...] block separately
+    3) try every {...} block
     Fallback: return dict with error + raw text.
     """
-
-    # 0) cleanup markdown fences
     text = _strip_markdown_fences(text)
-
     text = text.strip()
 
-    # 1) direct parse
+    # 1) direct pasring
     try:
         return json.loads(text)
     except Exception:
         pass
 
-    # 2) extract between first '[' and last ']'
-    start = text.find("[")
-    end = text.rfind("]")
-    if start != -1 and end != -1 and end > start:
-        candidate = text[start : end + 1]
+    # 2) find all possible JSON-array [...] blocks
+    array_matches = re.findall(r"\[[\s\S]*?\]", text)
+    for cand in array_matches:
         try:
-            return json.loads(candidate)
+            return json.loads(cand)
         except Exception:
-            # continue to fallback
-            pass
+            continue
 
-    # 3) fallback object (won't evaluate well, but at least is JSON)
+    # 3) try all JSON-object {...} blocks
+    object_matches = re.findall(r"\{[\s\S]*?\}", text)
+    for cand in object_matches:
+        try:
+            return json.loads(cand)
+        except Exception:
+            continue
+
+    # if all fails, return error + raw text
     logger.warning("Failed to parse LLM output as JSON, storing raw text.")
     return {
         "_error": "failed_to_parse_json",
         "raw_text": text,
     }
+
 
 
 def _dataset_dir(name: str) -> Path:
