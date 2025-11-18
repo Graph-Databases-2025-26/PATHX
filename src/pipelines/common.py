@@ -5,10 +5,6 @@ import re
 DATA = Path("data")
 
 def discover_datasets() -> list[str]:
-    """
-    Return all dataset folder names inside ./data (one level).
-    Ignores hidden folders and non-dirs. Sorted for stable order.
-    """
     out: list[str] = []
     for p in sorted(DATA.iterdir()):
         if p.is_dir() and not p.name.startswith("."):
@@ -16,10 +12,6 @@ def discover_datasets() -> list[str]:
     return out
 
 def read_queries(ds_dir: Path) -> list[str]:
-    """
-    Load and split queries_*.sql into individual SQL statements.
-    Strips '--' line comments; robust semicolon split; de-duplicates preserving order.
-    """
     qfiles = sorted(ds_dir.glob("queries*.sql")) or sorted(ds_dir.glob("queries_*.sql"))
     if not qfiles:
         raise FileNotFoundError(f"No queries_*.sql found in {ds_dir}")

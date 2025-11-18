@@ -1,20 +1,8 @@
-#!/usr/bin/env python3
-"""
-Generate EXPLAIN and EXPLAIN ANALYZE plans for all datasets.
-
-For each dataset under ./data/, runs all queries from its queries_*.sql file,
-then saves:
-  results/explain_json/<DATASET>/queryN__explain.json
-  results/explain_json/<DATASET>/queryN__analyze.json
-  results/explain_txt/<DATASET>/queryN__explain.txt
-  results/explain_txt/<DATASET>/queryN__analyze.txt
-"""
-
 from pathlib import Path
 import sys
 from src.utils.explain_export import save_both
 from src.pipelines.common import discover_datasets, read_queries
-from src.db.duckdb_client import connect_dataset_db, ingest_dataset
+from src.db_interaction.duckdb_client import connect_dataset_db, ingest_dataset
 from src.utils.logging import logger
 
 

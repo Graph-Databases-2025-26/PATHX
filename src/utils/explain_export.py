@@ -1,15 +1,3 @@
-"""
-Utilities to export DuckDB execution plans for a SQL query.
-
-- get_explain_text()          -> {"format":"text", "plan_text": "..."}
-- get_explain_analyze_text()  -> {"format":"text", "plan_text": "..."}
-
-- save_explain_pair()         -> writes <base>__explain.{json,txt} and <base>__analyze.{json,txt}
-Output dirs:
-  results/explain_json/<DATASET>/<file>.json
-  results/explain_txt/<DATASET>/<file>.txt
-"""
-
 from __future__ import annotations
 from pathlib import Path
 from typing import Dict
@@ -24,8 +12,6 @@ JSON_ROOT = RESULTS_ROOT / "explain_json"
 TXT_ROOT  = RESULTS_ROOT / "explain_txt"
 
 
-# ---------------------------- internals ----------------------------
-
 def _ensure_db(db_path: Path | str) -> Path:
     p = Path(db_path)
     if not p.exists():
@@ -35,10 +21,6 @@ def _ensure_db(db_path: Path | str) -> Path:
 
 
 def _run_explain_text(db_path: Path | str, sql: str, analyze: bool) -> str:
-    """
-    Run EXPLAIN (or EXPLAIN ANALYZE) and return the ASCII plan as one string.
-    Works on all DuckDB versions (no PRAGMA required).
-    """
     db = _ensure_db(db_path)
     con = duckdb.connect(str(db), read_only=True)
     try:
@@ -52,9 +34,6 @@ def _run_explain_text(db_path: Path | str, sql: str, analyze: bool) -> str:
 
 
 def _clean_plan_text(text: str) -> str:
-    """
-    Normalize newlines and strip generic headers so the TXT is just the tree.
-    """
     norm = text.replace("\r\n", "\n").replace("\r", "\n").lstrip()
     clean_lines: list[str] = []
     for line in norm.splitlines():
@@ -71,10 +50,6 @@ def _clean_plan_text(text: str) -> str:
 
 
 def _dataset_from_db(db_path: Path | str | None) -> str:
-    """
-    Resolve dataset name for foldering. If db_path is provided:
-      db/MOVIES.duckdb -> MOVIES
-    """
     if db_path:
         return Path(db_path).stem.upper()
     return "UNKNOWN"
@@ -97,8 +72,6 @@ def _write_txt(text: str, dataset: str, filename: str) -> Path:
     logger.info(f"Saved TXT plan  → {out_path}")
     return out_path
 
-
-# ---------------------------- public API ----------------------------
 
 def get_explain_text(db_path: Path | str, sql: str) -> Dict[str, str]:
     log_query_event("EXPLAIN", sql)
@@ -125,16 +98,6 @@ def save_text_plan(
     *,
     db_path: Path | str | None = None,
 ) -> Path:
-    """
-    Write the plan dict to JSON and, optionally, a cleaned TXT file.
-
-    Filenames are taken from `out_json` / `out_txt`, but destination directories
-    are fixed to:
-      JSON → results/explain_json/<DATASET>/
-      TXT  → results/explain_txt/<DATASET>/
-
-    DATASET is derived from `db_path` (stem, uppercased). If not provided -> UNKNOWN.
-    """
     out_json = Path(out_json)
     dataset = _dataset_from_db(db_path)
 
@@ -142,7 +105,7 @@ def save_text_plan(
     json_filename = out_json.name
     json_path = _write_json(plan, dataset, json_filename)
 
-    # TXT (optional)
+    # TXT
     if out_txt:
         txt_filename = Path(out_txt).name
         clean_text = _clean_plan_text(plan.get("plan_text", ""))
@@ -150,8 +113,6 @@ def save_text_plan(
 
     return json_path
 
-
-# -------- Compatibility aliases (public surface for teammates/tests) --------
 
 def get_explain(db_path: Path | str, sql: str):
     return get_explain_text(db_path, sql)
@@ -172,12 +133,6 @@ def save_analyze(db_path: Path | str, sql: str, out_path: Path | str):
 
 
 def save_explain_pair(db_path: Path | str, sql: str, out_base: Path | str):
-    """
-    Write two JSON files into results/explain_json/<DATASET>/:
-      <base>__explain.json
-      <base>__analyze.json
-    Returns (path_explain_json, path_analyze_json).
-    """
     base = Path(out_base)
     p_explain = base.with_name(base.name + "__explain.json")
     p_analyze = base.with_name(base.name + "__analyze.json")
@@ -187,21 +142,15 @@ def save_explain_pair(db_path: Path | str, sql: str, out_base: Path | str):
 
 
 def save_both(db_path: Path | str, sql: str, out_base: Path | str):
-    """
-    Write BOTH formats for both modes, into results/explain_{json,txt}/<DATASET>/:
-      <base>__explain.json / .txt
-      <base>__analyze.json / .txt
-    Returns (j_explain, t_explain, j_analyze, t_analyze).
-    """
     base = Path(out_base)
 
-    # EXPLAIN (plan only)
+    # EXPLAIN command
     plan = get_explain(db_path, sql)
     json_explain = base.with_name(base.name + "__explain.json")
     txt_explain  = base.with_name(base.name + "__explain.txt")
     j1 = save_text_plan(plan, json_explain, txt_explain, db_path=db_path)
 
-    # EXPLAIN ANALYZE (plan + timings)
+    # EXPLAIN ANALYZE command
     plan_an = get_explain_analyze(db_path, sql)
     json_analyze = base.with_name(base.name + "__analyze.json")
     txt_analyze  = base.with_name(base.name + "__analyze.txt")

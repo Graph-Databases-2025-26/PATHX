@@ -1,4 +1,3 @@
-# src/pipelines/sql_baseline.py
 from __future__ import annotations
 
 import argparse
@@ -22,10 +21,6 @@ PROVIDER_CHOICES = ("azure", "gemini", "watsonx")
 
 
 def _load_provider(name: str) -> Callable[[str], Any]:
-    """
-    Lazily import the chosen provider so that missing creds for others
-    do not break the run. Returns the provider's generate_text callable.
-    """
     try:
         if name == "azure":
             return import_module("src.llm.azure_client").generate_text
@@ -244,11 +239,9 @@ def _dataset_dir(name: str) -> Path:
     return DATA_ROOT / name
 
 
-# ---------- core logic ----------
 
 def run_sql_baseline_for_dataset(dataset: str, strategy: str, llm_fn: Callable[[str], Any]) -> None:
     """
-    For a single dataset:
     - read queries_*.sql
     - send each SQL query to the LLM
     - save results to sql_baseline_results/<DATASET>/query<i>.json
@@ -307,16 +300,6 @@ def run_sql_baseline_for_dataset(dataset: str, strategy: str, llm_fn: Callable[[
         logger.info(f"[{dataset}] Q{i} → {out_path}")
 
 def main() -> None:
-    """
-    CLI entry point.
-
-    Examples:
-        # run for all datasets discovered in ./data with default strategy and default model
-        python -m src.pipelines.sql_baseline
-
-        # run only for movies and geo with a specific strategy and model
-        python -m src.pipelines.sql_baseline --datasets movies geo --strategy strict_json --provider gemini
-    """
     ap = argparse.ArgumentParser(description="Run SQL baseline (Baseline 3) with select LLM backend.")
     ap.add_argument(
         "--datasets",

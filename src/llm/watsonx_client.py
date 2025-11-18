@@ -1,4 +1,3 @@
-# src/llm/watsonx_client.py
 from __future__ import annotations
 
 import logging
@@ -24,7 +23,6 @@ if not WATSONX_API_KEY or not WATSONX_PROJECT_ID:
         "WATSONX_API_KEY and WATSONX_PROJECT_ID must be set in the environment."
     )
 
-# --- single persistent model object ---
 _creds = Credentials(
     api_key=WATSONX_API_KEY,
     url=WATSONX_URL,
@@ -62,7 +60,7 @@ def generate_text(prompt: str) -> Tuple[str, int | None]:
         # if not a dict, try to convert to string
         text = str(resp)
 
-    # token amounts (if SDK returns usage)
+    # token amounts if SDK returns usage
     tokens = None
     if isinstance(resp, dict):
         usage = resp.get("usage") or {}

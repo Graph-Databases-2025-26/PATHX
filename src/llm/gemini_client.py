@@ -1,4 +1,3 @@
-# src/llm/gemini_client.py
 from __future__ import annotations
 
 import logging
@@ -67,10 +66,6 @@ def _extract_text(response: Any) -> str:
 
 
 def generate_text(prompt: str) -> tuple[str, int | None]:
-    """
-    Calls Gemini synchronously and returns (text, total_tokens).
-    Token count can be None if the SDK does not provide usage metadata.
-    """
     try:
         response = _model.generate_content(
             prompt,

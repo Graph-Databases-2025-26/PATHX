@@ -1,4 +1,3 @@
-# src/llm/azure_client.py
 from __future__ import annotations
 
 import logging
@@ -33,10 +32,8 @@ def _build_client() -> AzureOpenAI:
     )
 
 
-# Global client instance
 _client = _build_client()
 
-# deployment name
 _AZURE_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
 
 
@@ -52,7 +49,7 @@ def generate_text(
     """
 
     try:
-        # Azure does not support the Responses API yet; use chat completions instead.
+        # Azure does not support the Responses API; it uses chat completions instead.
         response = _client.chat.completions.create(
             model=_AZURE_DEPLOYMENT,
             messages=[{"role": "user", "content": prompt}],

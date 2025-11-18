@@ -2,7 +2,7 @@ from __future__ import annotations
 import argparse, json, time
 from pathlib import Path
 
-from ..db.duckdb_client import connect_dataset_db, ingest_dataset
+from ..db_interaction.duckdb_client import connect_dataset_db, ingest_dataset
 from .common import discover_datasets, read_queries
 
 DATA = Path("data")
