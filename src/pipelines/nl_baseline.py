@@ -20,11 +20,13 @@ logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
 DATA_ROOT = Path("data")
 OUT_ROOT = Path("nl_baseline_results")
-PROVIDER_CHOICES = ("gemini", "watsonx")
+PROVIDER_CHOICES = ("azure","gemini", "watsonx")
 
 def _load_provider(name: str) -> Callable[[str], Any]:
     
     try:
+        if name == "azure":
+            return import_module("src.llm.azure_client").generate_text
         if name == "gemini":
             return import_module("src.llm.gemini_client").generate_text
         if name == "watsonx":
