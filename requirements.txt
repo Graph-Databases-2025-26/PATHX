@@ -2,7 +2,8 @@
 # Generated from imports in: build_ground_truth.py, galois_eval.py, run_batch_export.py, and data/mma/*.py
 # Stdlib-only files need no extra packages.
 duckdb>=1.0.0
-pandas>=2.2.0
+pandas==1.5.3
+numpy==1.26.4
 requests>=2.31.0
 rapidfuzz
 python-Levenshtein
