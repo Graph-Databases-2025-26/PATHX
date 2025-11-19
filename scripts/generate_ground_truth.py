@@ -1,9 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """
-pathX — end-to-end runner.
-
 Steps:
   1) Build ground truth
   2) Ingest datasets -> DuckDB files
@@ -25,7 +20,6 @@ from pathlib import Path
 PY = sys.executable
 ROOT = Path(__file__).resolve().parents[1]
 
-# ---- defaults ----
 DEF_DATASETS = ["flight-2", "flight-4", "fortune", "geo", "movies", "premier", "presidents", "world"]
 DATA_ROOT = "data"
 GROUND_ROOT = "ground"
@@ -53,8 +47,7 @@ def step_build_ground(datasets: list[str], data_root: str, ground_root: str):
     run(cmd, title="Build ground truth")
 
 def step_ingest_all(datasets: list[str]):
-    # src/db/ingest_all.py receives --datasets (или без — все)
-    cmd = [PY, "src/db/ingest_all.py"]
+    cmd = [PY, "src/db_interaction/ingest_all.py"]
     if datasets:
         cmd += ["--datasets", *datasets]
     run(cmd, title="Ingest datasets to DuckDB")
@@ -64,12 +57,11 @@ def step_run_queries():
     run(cmd, title="Run queries -> submissions")
 
 def step_export_explain():
-    # results/explain_{json,txt}/<DATASET>/
     cmd = [PY, "-m", "src.pipelines.run_explain_all"]
     run(cmd, title="Export EXPLAIN (txt/json)")
 
 def step_evaluate(datasets_caps: list[str], ground_dir: str, submissions_dir: str, fmt: str):
-    # scripts/galois_eval.py --ground <dir> --submissions <dir> --datasets (CAPS!)
+    # scripts/galois_eval.py --ground <dir> --submissions <dir> --datasets
     cmd = [
         PY, "scripts/galois_eval.py",
         "--ground", ground_dir,
