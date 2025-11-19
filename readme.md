@@ -129,7 +129,7 @@ Optional `ingest_*.sql` files are executed before CSV fallbacks, so you can pred
 ### Build ground truth (JSON answers)
 
 ```bash
-python scripts/build_ground_truth.py \
+python -m scripts/build_ground_truth.py \
   --data-root data \
   --ground-root ground \
   --datasets flight-2 flight-4 fortune geo movies premier presidents world
@@ -141,7 +141,7 @@ Outputs land in `ground/<DATASET>/queryN.json`.
 ### Ingest datasets into DuckDB files
 
 ```bash
-python src/db_interaction/ingest_all.py --datasets geo movies
+python -m src/db_interaction/ingest_all.py --datasets geo movies
 ```
 
 Creates `db/<DATASET>.duckdb` (one per dataset), running `ingest*.sql` when present or auto-creating tables from CSVs.  
@@ -186,7 +186,7 @@ Uses the prompt template at `src/llm/prompts/nl_query.txt`. Results are written 
 After both baselines produce outputs, evaluate them with the optimized GALOIS script:
 
 ```
-python scripts/galois_eval.py \
+python -m scripts/galois_eval.py \
   --ground ground \
   --submissions sql_baseline_results \
   --datasets GEO MOVIES \
