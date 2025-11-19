@@ -238,12 +238,4 @@ Prompt engineering lives alongside the pipelines:
 
 Every provider callable must expose `generate_text(prompt) -> tuple[str, int | None]`, making it easy to add new backends.
 
----
-
-## Utilities & Shortcuts
-
-- `scripts/run_batch_export.py`: calls a running **py-galois** service via HTTP and stores JSON outputs plus metadata (`queryN.meta.json`). Handy for large-scale evaluations.
-- `scripts/run_baselines_and_compare.py`: orchestrates NL baseline → SQL baseline → comparison in one command.
-- `src/pipelines/galois_pipeline.py`: placeholder entry point for experimenting with custom LLM-aware physical plans (LLMScan, Filter-LLMScan, etc.).
-- `src/utils/`: shared helpers for I/O, timers, logging, and explain export logic.
 
