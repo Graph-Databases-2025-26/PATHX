@@ -4,7 +4,7 @@
 Team: Juliette Tonneau · Minseok Kim · Bita Khashechian · Danil Smirnov
 
 This repository reproduces the SQL↔LLM experiments from the SIGMOD’25 *GALOIS* paper.  
-The codebase lets you: ingest datasets into DuckDB, build ground-truth answers, run LLM-powered SQL/NL baselines (Azure OpenAI, Google Gemini, IBM watsonx), export EXPLAIN plans, and compare your runs against the paper metrics.
+The codebase lets ingest datasets into DuckDB, build ground-truth answers, run LLM-powered SQL/NL baselines (Azure OpenAI, Google Gemini, IBM watsonx), export EXPLAIN plans, and compare runs against the paper metrics.
 
 ---
 
@@ -27,12 +27,10 @@ The codebase lets you: ingest datasets into DuckDB, build ground-truth answers, 
 |-------|-------------|-------------|
 | Ground Truth | Execute queries over CSVs with DuckDB to create reference answers. | `ground/<DATASET>/queryN.json` |
 | DuckDB Prep | Build per-dataset `.duckdb` files for reuse (queries, EXPLAIN). | `db/<DATASET>.duckdb` |
-| Deterministic SQL | Run queries directly on DuckDB to simulate perfect execution. | `submissions/<DATASET>/queryN.json` |
-| NL & SQL LLM Baselines | Prompt LLMs to answer SQL (structured output) or NL-style questions. | `submissions/`, `sql_baseline_results/` |
-| Evaluation | Compare any submission folder against ground truth with GALOIS metrics. | CLI tables/CSV + comparison tables |
+| Deterministic SQL | Run queries directly on DuckDB to simulate execution. | `submissions/<DATASET>/queryN.json` |
+| NL & SQL LLM Baselines | Prompt LLMs to answer SQL (structured output) or NL-style questions. | `nl_baseline_results/`, `sql_baseline_results/` |
+| Evaluation | Compare any submission folder against ground truth with GALOIS metrics. | Comparison table |
 | Explain Export | Save EXPLAIN/ANALYZE text + JSON for each query. | `results/explain_*` |
-
-The repository is intentionally modular so every step can be repeated independently or wired together through helper scripts.
 
 ---
 
@@ -40,16 +38,17 @@ The repository is intentionally modular so every step can be repeated independen
 
 ```
 pathX/
-├── data/                     # datasets (CSV + queries_*.sql) – you provide
+├── data/                     # datasets (CSV + queries_*.sql)
 ├── db/                       # DuckDB files, created locally
 ├── ground/                   # ground-truth query outputs
 ├── results/                  # explain_json / explain_txt
 ├── submissions/              # deterministic (DuckDB) query outputs
 ├── sql_baseline_results/     # LLM SQL baseline outputs
+├── nl_baseline_results/      # LLM NL baseline outputs
 ├── scripts/                  # automation helpers & evaluation tools
 ├── src/
 │   ├── db_interaction/       # DuckDB ingest helpers
-│   ├── llm/                  # provider clients + prompts
+│   ├── llm/                  # provider LLM models+ prompts
 │   ├── pipelines/            # CLI pipelines (queries, baselines, compare)
 │   ├── utils/                # logging, timers, JSON helper
 │   └── ...
@@ -148,14 +147,6 @@ python src/db_interaction/ingest_all.py --datasets geo movies
 Creates `db/<DATASET>.duckdb` (one per dataset), running `ingest*.sql` when present or auto-creating tables from CSVs.  
 Used later by the deterministic SQL pipeline and EXPLAIN exporter.
 
-### Deterministic SQL execution (baseline 0)
-
-```bash
-python -m src.pipelines.run_queries --datasets movies geo
-```
-
-Runs the queries directly inside DuckDB and writes canonical JSON answers to `submissions/<DATASET>/queryN.json`. These files can be compared against ground truth to verify ingestion fidelity.
-
 ### Export EXPLAIN / ANALYZE plans
 
 ```bash
@@ -173,11 +164,11 @@ For each dataset/query, saves text and JSON explain plans under `results/explain
 ```
 python -m src.pipelines.sql_baseline \
   --datasets movies geo \
-  --strategy fewshot \
+  --strategy direct \
   --provider watsonx
 ```
 
-- **Strategies**: `strict_json`, `json_example`, `constrained`, `hidden_cot`, `fewshot`, `compact`.  
+- **Strategies**: `strict_json`, `constrained`, `hidden_cot`, `fewshot`, `compact`.  
 - Outputs stored in `sql_baseline_results/<DATASET>/queryN.json` with metadata (`time`, `tokens`, `result_set`).
 
 ### 2. NL baseline (LLM answers natural-language prompt derived from SQL)
@@ -215,7 +206,12 @@ This runs the evaluator for NL + SQL folders and prints a side-by-side table (ou
 ### 4. All-in-one baseline runner
 
 ```
-python scripts/run_baselines_and_compare.py \
+python -m scripts/run_baselines_and_compare.py
+```
+Runs baselines with default flags and compare results to paper
+
+```
+python -m scripts/run_baselines_and_compare.py \
   --datasets geo movies \
   --nl-provider watsonx \
   --sql-provider gemini \
@@ -223,22 +219,6 @@ python scripts/run_baselines_and_compare.py \
 ```
 
 Flags allow skipping NL/SQL/compare steps or running compare-only.
-
-### 5. Full end-to-end pipeline
-
-`scripts/generate_ground_truth.py` wraps every stage (build ground, ingest, run queries, explain, evaluate).  
-Example:
-
-```
-python scripts/generate_ground_truth.py \
-  --datasets flight-2 flight-4 movies \
-  --skip-explain
-```
-
-- `--baseline` evaluates ground vs ground (sanity check).
-- Use `--skip-*` flags to resume partially completed runs.
-
----
 
 ## LLM Providers & Prompts
 
@@ -267,16 +247,3 @@ Every provider callable must expose `generate_text(prompt) -> tuple[str, int | N
 - `src/pipelines/galois_pipeline.py`: placeholder entry point for experimenting with custom LLM-aware physical plans (LLMScan, Filter-LLMScan, etc.).
 - `src/utils/`: shared helpers for I/O, timers, logging, and explain export logic.
 
----
-
-## Development Notes
-
-- Keep results and secrets out of git: add `.env`, credentials, or huge dataset dumps to `.gitignore`.
-- Prefer `python -m <module>` when invoking pipelines; relative imports assume repo root as working directory.
-- When editing prompts or adding providers, ensure outputs remain valid JSON arrays of row objects (`result_set`). The evaluator relies on that schema.
-- Testing tips:
-  1. Start with deterministic runs (`run_queries`) and compare to ground truth using `scripts/galois_eval.py --submissions submissions`.
-  2. Once ingestion matches, switch to LLM baselines and compare via `sql_baseline_results` / `submissions`.
-- Logs default to INFO; adjust via `LOGLEVEL=DEBUG python -m ...` if needed.
-
-Questions, improvements, or bug reports are welcome—open an issue or reach out on the course channels. Happy hacking! 🎯
