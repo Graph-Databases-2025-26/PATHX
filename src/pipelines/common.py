@@ -29,3 +29,15 @@ def read_queries(ds_dir: Path) -> list[str]:
                 seen.add(s)
                 stmts.append(s)
     return stmts
+
+def read_nl_queries(ds_dir: Path) -> list[str]:
+    qfiles = sorted(ds_dir.glob("queries*.txt")) or sorted(ds_dir.glob("queries_*.txt"))
+    if not qfiles:
+        raise FileNotFoundError(f"No queries_*.txt found in {ds_dir}")
+    text = qfiles[0].read_text(encoding="utf-8")
+    queries = [
+        ln.strip()
+        for ln in text.splitlines()
+        if ln.strip() and not ln.strip().startswith("--")
+    ]
+    return queries

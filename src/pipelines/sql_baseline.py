@@ -8,16 +8,32 @@ import re
 import time
 from importlib import import_module
 from pathlib import Path
-from typing import List, Any, Callable
+from typing import List, Any, Callable, Dict
+
+from pydantic import BaseModel, Field
+from langchain_core.output_parsers import PydanticOutputParser
 
 from .common import discover_datasets, read_queries
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
+PROMPTS_ROOT = Path("src/llm/prompts")
+PROMPT_FILENAME_TEMPLATE = "{strategy}.txt"
+
 DATA_ROOT = Path("data")
 OUT_ROOT = Path("sql_baseline_results")
 PROVIDER_CHOICES = ("azure", "gemini", "watsonx")
+
+
+class Response(BaseModel):
+    result_set: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="List of result records, each as a {column_name: value} dict.",
+    )
+
+
+PARSER = PydanticOutputParser(pydantic_object=Response)
 
 
 def _load_provider(name: str) -> Callable[[str], Any]:
@@ -32,148 +48,6 @@ def _load_provider(name: str) -> Callable[[str], Any]:
         raise RuntimeError(f"Failed to initialize LLM provider '{name}': {e}")
     raise ValueError(f"Unknown provider: {name}")
 
-def build_prompt_strict_json(dataset: str, sql: str) -> str:
-    return f"""
-You are a deterministic SQL execution engine.
-
-You will execute the following SQL query on the "{dataset}" database.
-Return ONLY the execution result as a **valid JSON array**.
-
-STRICT RULES:
-- Output MUST be valid JSON.
-- Top-level MUST be a JSON list.
-- Each row MUST be a JSON object {{column: value}}.
-- NO explanations.
-- NO Markdown.
-- NO comments.
-- NO surrounding text.
-- DO NOT include keys like "result", "data", "rows".
-
-SQL query:
-{sql}
-""".strip()
-
-def build_prompt_json_example(dataset: str, sql: str) -> str:
-    return f"""
-You are an expert SQL interpreter.
-
-Execute the SQL query on the "{dataset}" database and return ONLY the result rows.
-
-Your response MUST follow this JSON template:
-
-[
-  {{"column1": "value1", "column2": 123}},
-  {{"column1": "value2", "column2": 456}}
-]
-
-Your output MUST:
-- be valid JSON
-- contain one object per row
-- use correct column names
-- contain no text before or after the JSON
-
-SQL query:
-{sql}
-""".strip()
-
-def build_prompt_constrained(dataset: str, sql: str) -> str:
-    return f"""
-You simulate a SQL execution engine.
-
-TASK:
-Return ONLY the SQL query result as a JSON ARRAY.
-
-HARD REQUIREMENTS:
-1. Output must be **valid JSON**.
-2. Top-level must be a **list**.
-3. Each row must be an **object**.
-4. Keys must be **exact SQL column names**.
-5. Do NOT describe, explain, comment, or format with markdown.
-6. Do NOT include text outside the JSON.
-
-FAILURE CONDITIONS (do NOT do these):
-- No "Here is the result".
-- No "```json".
-- No extra keys like "output" or "result".
-
-Now execute:
-
-{sql}
-""".strip()
-
-def build_prompt_hidden_cot(dataset: str, sql: str) -> str:
-    return f"""
-You are an advanced SQL interpreter.
-
-You may perform internal reasoning to understand the query,
-but the FINAL OUTPUT must be ONLY a JSON array of rows.
-
-INVISIBLE RULES:
-- Think step-by-step internally, but DO NOT reveal the reasoning.
-- Return ONLY the final JSON array.
-- Must be valid JSON.
-- No markdown, comments, or text outside JSON.
-
-SQL query:
-{sql}
-""".strip()
-
-def build_prompt_fewshot(dataset: str, sql: str) -> str:
-    return f"""
-You are a SQL execution engine.
-
-BAD EXAMPLE (DO NOT DO THIS):
-Result:
-[
-  {{ "value": 1 }}
-]
-
-GOOD EXAMPLE (DO THIS):
-[
-  {{"columnA": "abc", "columnB": 123}},
-  {{"columnA": "def", "columnB": 456}}
-]
-
-Follow these rules:
-- Valid JSON only.
-- JSON array only.
-- Each row is an object with correct column names.
-- No explanation, no markdown.
-
-Execute on database "{dataset}" this SQL:
-
-{sql}
-""".strip()
-
-def build_prompt_compact(dataset: str, sql: str) -> str:
-    return f"""
-Execute SQL on database "{dataset}" and output ONLY valid JSON:
-
-RULE:
-[
-  {{col1: val1, col2: val2}},
-  ...
-]
-
-NOTHING before or after the JSON.
-
-SQL:
-{sql}
-""".strip()
-
-
-def build_prompt(strategy: str, dataset: str, sql: str) -> str:
-    strategies = {
-        "strict_json": build_prompt_strict_json,
-        "json_example": build_prompt_json_example,
-        "constrained": build_prompt_constrained,
-        "hidden_cot": build_prompt_hidden_cot,
-        "fewshot": build_prompt_fewshot,
-        "compact": build_prompt_compact,
-    }
-    if strategy not in strategies:
-        raise ValueError(f"Unknown strategy: {strategy}")
-    return strategies[strategy](dataset, sql)
 
 def _strip_markdown_fences(text: str) -> str:
     if text is None:
@@ -185,7 +59,7 @@ def _strip_markdown_fences(text: str) -> str:
         # remove first block ```...<\n>
         first_newline = text.find("\n")
         if first_newline != -1:
-            text = text[first_newline+1:]
+            text = text[first_newline + 1 :]
         # remove last ```
         last_fence = text.rfind("```")
         if last_fence != -1:
@@ -194,17 +68,10 @@ def _strip_markdown_fences(text: str) -> str:
 
 
 def _try_extract_json(text: str) -> Any:
-    """
-    Try to parse JSON from the LLM output.
-    1) direct json.loads
-    2) try every [...] block separately
-    3) try every {...} block
-    Fallback: return dict with error + raw text.
-    """
     text = _strip_markdown_fences(text)
     text = text.strip()
 
-    # 1) direct pasring
+    # 1) direct parsing
     try:
         return json.loads(text)
     except Exception:
@@ -234,18 +101,58 @@ def _try_extract_json(text: str) -> Any:
     }
 
 
-
 def _dataset_dir(name: str) -> Path:
     return DATA_ROOT / name
 
 
+def _load_prompt_template(strategy: str) -> str:
+    prompt_file = PROMPTS_ROOT / PROMPT_FILENAME_TEMPLATE.format(strategy=strategy)
 
-def run_sql_baseline_for_dataset(dataset: str, strategy: str, llm_fn: Callable[[str], Any]) -> None:
-    """
-    - read queries_*.sql
-    - send each SQL query to the LLM
-    - save results to sql_baseline_results/<DATASET>/query<i>.json
-    """
+    if not prompt_file.exists():
+        raise FileNotFoundError(f"Prompt file not found for strategy '{strategy}': {prompt_file}")
+
+    try:
+        template = prompt_file.read_text(encoding="utf-8").strip()
+
+        if "{dataset}" not in template or "{sql}" not in template:
+            logger.warning(
+                f"Prompt template '{prompt_file}' does not contain expected placeholders "
+                f"'{{dataset}}' or '{{sql}}'. Ensure correct file content."
+            )
+
+        return template
+    except Exception as e:
+        raise IOError(f"Failed to read prompt file '{prompt_file}': {e}")
+
+
+def build_prompt(strategy: str, dataset: str, sql: str) -> str:
+    template = _load_prompt_template(strategy)
+
+    try:
+        base_prompt = template.format(dataset=dataset, sql=sql).strip()
+    except KeyError as e:
+        raise ValueError(
+            f"Prompt template for strategy '{strategy}' is missing a required placeholder: {e}. "
+            f"Check the template file content."
+        )
+
+    format_instructions = PARSER.get_format_instructions()
+
+
+    full_prompt = (
+        f"{base_prompt}\n\n"
+        f"{format_instructions}\n\n"
+    )
+
+    return full_prompt.strip()
+
+
+
+def run_sql_baseline_for_dataset(
+    dataset: str,
+    strategy: str,
+    llm_fn: Callable[[str], Any],
+) -> None:
     ds_dir = _dataset_dir(dataset)
     if not ds_dir.exists():
         logger.error(f"Dataset directory not found: {ds_dir}")
@@ -263,54 +170,73 @@ def run_sql_baseline_for_dataset(dataset: str, strategy: str, llm_fn: Callable[[
 
     for i, sql in enumerate(sqls, start=1):
         logger.info(f"[{dataset}] Q{i}/{len(sqls)}")
-        prompt = build_prompt(strategy, dataset, sql)
 
-        elapsed = None 
-
-        tokens = None
         try:
-            t0 = time.time()
-            result = llm_fn(prompt)
-            elapsed = time.time() - t0
-            if isinstance(result, (tuple, list)):
-                raw_answer = result[0]
-                tokens = result[1] if len(result) > 1 else None
-            else:
-                raw_answer = result
-        except Exception as e:
-            logger.error(f"[{dataset}] Q{i} – LLM call failed: {e}")
-            data = {"_error": str(e), "prompt": prompt}
+            prompt = build_prompt(strategy, dataset, sql)
+        except (FileNotFoundError, IOError, ValueError) as e:
+            logger.error(f"[{dataset}] Q{i} – Failed to build prompt: {e}")
+            data: Dict[str, Any] = {"_error": str(e), "prompt": None, "sql": sql}
         else:
-            data = _try_extract_json(raw_answer)
+            elapsed = None
+            tokens = None
+            try:
+                t0 = time.time()
+                result = llm_fn(prompt)
+                elapsed = time.time() - t0
 
-        # Full JSON wrapping
-        if isinstance(data, list):
-            data = {"result_set": data}
-        elif isinstance(data, dict) and "result_set" not in data:
-            data = {"result_set": [data]}
+                if isinstance(result, (tuple, list)):
+                    raw_answer = result[0]
+                    tokens = result[1] if len(result) > 1 else None
+                else:
+                    raw_answer = result
+            except Exception as e:
+                logger.error(f"[{dataset}] Q{i} – LLM call failed: {e}")
+                data = {"_error": str(e), "prompt": prompt}
+            else:
+                try:
+                    parsed: Response = PARSER.parse(_strip_markdown_fences(str(raw_answer)))
+                    data = {"result_set": parsed.result_set}
+                except Exception as e:
+                    logger.warning(
+                        f"[{dataset}] Q{i} – Pydantic parsing failed ({e}), "
+                        f"falling back to regex-based JSON extraction."
+                    )
+                    data = _try_extract_json(str(raw_answer))
 
-        # Add time/tokens
-        if isinstance(data, dict):
-            data.setdefault("tokens", tokens)
-            # If LLM called successfully — write time, else None
-            data["time"] = round(elapsed, 3) if elapsed is not None else None
+        if "_error" not in data:
+            if isinstance(data, list):
+                data = {"result_set": data}
+            elif isinstance(data, dict) and "result_set" not in data:
+                data = {"result_set": [data]}
+
+            if isinstance(data, dict):
+                data.setdefault("tokens", tokens)
+                data["time"] = round(elapsed, 3) if elapsed is not None else None
+        else:
+            data["time"] = None
+            data["tokens"] = None
 
         out_path = out_dir / f"query{i}.json"
         out_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         logger.info(f"[{dataset}] Q{i} → {out_path}")
 
+
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Run SQL baseline (Baseline 3) with select LLM backend.")
+    ap = argparse.ArgumentParser(
+        description="Run SQL baseline (Baseline 3) with select LLM backend."
+    )
     ap.add_argument(
         "--datasets",
         nargs="*",
-        help="Optional list of dataset names (as folder names under ./data). "
-             "If omitted, all datasets discovered in ./data are used.",
+        help=(
+            "Optional list of dataset names (as folder names under ./data). "
+            "If omitted, all datasets discovered in ./data are used."
+        ),
     )
     ap.add_argument(
         "--strategy",
-        choices=["strict_json", "json_example", "constrained", "hidden_cot", "fewshot", "compact", "result_set"],
-        default="fewshot",
+        choices=["strict_json", "constrained", "hidden_cot", "fewshot", "direct"],
+        default="direct",
         help="Prompting strategy to use for the SQL baseline.",
     )
     ap.add_argument(
@@ -321,6 +247,12 @@ def main() -> None:
     )
 
     args = ap.parse_args()
+
+    if not PROMPTS_ROOT.exists():
+        logger.error(
+            f"Prompts directory not found: {PROMPTS_ROOT}. Please create it and add prompt files."
+        )
+        return
 
     datasets = args.datasets or discover_datasets()
     llm_fn = _load_provider(args.provider)
