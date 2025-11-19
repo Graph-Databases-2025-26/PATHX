@@ -15,14 +15,6 @@ ground/
 db/
 *.duckdb
 
-# LaTeX 
-*.aux
-.fdb_latexmk
-.fls
-.log
-.out
-.synctex.gz
-
 # VS Code
 .vscode/
 
