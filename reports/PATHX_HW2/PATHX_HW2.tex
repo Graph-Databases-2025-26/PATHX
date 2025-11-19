@@ -26,7 +26,7 @@
 \begin{abstract}
 This project is part of the reproduction of the GALOIS system, which aims to improve SQL query execution over Large Language Models (LLMs). Since LLMs are increasingly used for structured information retrieval, it is important to understand how well they behave when treated as a ``virtual database.''
 
-In this phase, we implemented and evaluated some baseline methods: Natural language prompting, direct SQL prompting and few-shot prompting. These baselines were executed across three different LLM providers: Google Gemini, IBM WatsonX, and Azure OpenAI. The purpose of this report is to describe our methodology, the experimental setup, the results, and how this work prepares the ground for the next phase, where we will implement the optimized strategies introduced in the GALOIS framework.
+In this phase, we implemented and evaluated some baseline methods: Natural language prompting and direct SQL prompting. These baselines were executed across three different LLM providers: Google Gemini, IBM WatsonX, and Azure OpenAI. The purpose of this report is to describe our methodology, the experimental setup, the results, and how this work prepares the ground for the next phase, where we will implement the optimized strategies introduced in the GALOIS framework.
 \end{abstract}
 
 \section{Introduction}
@@ -90,10 +90,6 @@ We computed:
 \end{itemize}
 
 Additionally, we measured absolute and relative differences compared to the published numbers in paper.
-
-\section{Baseline Methods}
-
-The same three baselines were applied to all three LLM providers.
 
 \section{NL Baseline (Baseline 1)}
 
@@ -237,8 +233,7 @@ Prompts are constructed through \verb|build_prompt(strategy, dataset, sql)|, sel
    
 
     \item \verb|fewshot| – provides a set of positive (good) and negative (bad) examples of JSON outputs.  
-    The model is instructed to emulate the correct examples and avoid incorrect ones, leveraging demonstration-based learning to improve formatting reliability.  
-    This strategy is the default.  
+    The model is instructed to emulate the correct examples and avoid incorrect ones, leveraging demonstration-based learning to improve formatting reliability.   
     
     
 \end{itemize}
@@ -380,6 +375,72 @@ To ensure replication fidelity, we used the evaluator (implemented in \texttt{ga
 \end{itemize}
 
 The Python tool \texttt{compare\_results.py} orchestrated the execution of \texttt{galois\_eval.py} on our two submission sets to obtain aggregated results (AVG-Score, F1-Cell, Cardinality, Tuple Constr., Avg Time, \#Tokens (M)).
+
+\subsection{Running the baselines and comparison}
+\label{subsec:run-baselines}
+
+For running all our experiments we use a single helper script,
+\texttt{scripts/run\_baselines\_and\_compare.py}. It calls the two baseline
+pipelines
+
+\begin{itemize}
+    \item \textbf{NL baseline:} \texttt{src.pipelines.nl\_baseline}
+    \item \textbf{SQL baseline:} \texttt{src.pipelines.sql\_baseline}
+\end{itemize}
+
+and then runs the evaluation code \texttt{src.pipelines.compare\_results}. In
+this way we can choose datasets, model providers, prompting strategies, and the
+parts of the pipeline we want to execute from a single command.
+
+\paragraph{Main options.}
+The most important arguments are:
+\begin{itemize}
+    \item \texttt{--datasets} \textit{D\_1 D\_2 \dots}: names of the datasets
+    to run (these correspond to folder names under \texttt{./data}).
+    \item \texttt{--nl-provider}, \texttt{--sql-provider}: provider used for
+    the NL and SQL baselines. Supported values are \texttt{azure},
+    \texttt{gemini} and \texttt{watsonx}.
+    \item \texttt{--sql-strategy}: prompting strategy
+    for SQL baseline (for example \texttt{direct}, \texttt{few\_shot},\dots).
+    \item \texttt{--skip-nl}, \texttt{--skip-sql}, \texttt{--skip-compare}:
+    skip the NL baseline, the SQL baseline, or the comparison step.
+    \item \texttt{--compare-only}: only run \texttt{compare\_results} on
+    outputs that were produced in an earlier run.
+\end{itemize}
+
+If no skip flags are given, the script runs both NL and SQL baselines with the
+chosen settings on the selected datasets and then performs the comparison.
+
+\paragraph{Usage examples.}
+
+Run NL and SQL baselines on all three datasets (\texttt{GEO},
+\texttt{MOVIES} and \texttt{WORLD}) and then evaluate:
+
+\begin{verbatim}
+python -m scripts.run_baselines_and_compare --datasets GEO MOVIES WORLD
+\end{verbatim}
+
+Run the full pipeline only on \texttt{GEO}:
+
+\begin{verbatim}
+python -m scripts.run_baselines_and_compare --datasets GEO
+\end{verbatim}
+
+Run only the SQL baseline on two datasets and still perform the comparison:
+
+\begin{verbatim}
+python -m scripts.run_baselines_and_compare --datasets GEO MOVIES --skip-nl
+\end{verbatim}
+
+Re-run just the comparison step (useful if the outputs are already stored):
+
+\begin{verbatim}
+python -m scripts.run_baselines_and_compare --compare-only
+\end{verbatim}
+
+This script keeps the command line interface simple and makes it easier to
+repeat the experiments with different providers or prompting strategies.
+
 
 \section{Results and Comparative Analysis}
 
