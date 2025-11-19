@@ -2,17 +2,21 @@
 # Generated from imports in: build_ground_truth.py, galois_eval.py, run_batch_export.py, and data/mma/*.py
 # Stdlib-only files need no extra packages.
 duckdb>=1.0.0
-pandas==1.5.3
-numpy==1.26.4
+pandas
+numpy
 requests>=2.31.0
 rapidfuzz
 python-Levenshtein
 orjson
+langchain-core>=0.1.0
 
 ibm-watsonx-ai>=1.1.9
+langchain-ibm>=0.1.0
+
 python-dotenv>=1.0.1
 
 google-generativeai>=0.6.0
+langchain-google-genai>=0.1.0
 
 azure-ai-inference
 openai>=0.27.0
