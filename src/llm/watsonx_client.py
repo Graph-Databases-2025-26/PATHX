@@ -3,11 +3,10 @@ from __future__ import annotations
 import logging
 import os
 from typing import Tuple
+
 from dotenv import load_dotenv
-
-from ibm_watsonx_ai.foundation_models import ModelInference
-from ibm_watsonx_ai import Credentials
-
+from langchain_ibm import ChatWatsonx
+from langchain_core.messages import BaseMessage
 
 logger = logging.getLogger(__name__)
 
@@ -20,53 +19,72 @@ WATSONX_MODEL_ID = os.getenv("WATSONX_MODEL_ID", "ibm/granite-3-3-8b-instruct")
 
 if not WATSONX_API_KEY or not WATSONX_PROJECT_ID:
     raise RuntimeError(
-        "WATSONX_API_KEY and WATSONX_PROJECT_ID must be set in the environment."
+        "WATSONX_APIKEY (or WATSONX_API_KEY) and WATSONX_PROJECT_ID must be set in the environment."
     )
 
-_creds = Credentials(
-    api_key=WATSONX_API_KEY,
-    url=WATSONX_URL,
-)
-
 _params = {
-    "max_new_tokens": 512,
     "temperature": 0,
-    "stop_sequences": ["]\n"],
-    "repetition_penalty": 1.2,
 }
 
-_model = ModelInference(
-    model_id=WATSONX_MODEL_ID,
-    project_id=WATSONX_PROJECT_ID,
-    credentials=_creds,
-    params=_params,
-)
+_llm: ChatWatsonx | None = None
+
+
+def _get_llm() -> ChatWatsonx:
+    global _llm
+    if _llm is None:
+        logger.info("Creating LangChain ChatWatsonx client...")
+        _llm = ChatWatsonx(
+            model_id=WATSONX_MODEL_ID,
+            url=WATSONX_URL,
+            project_id=WATSONX_PROJECT_ID,
+            apikey=WATSONX_API_KEY,
+            params=_params,
+        )
+    return _llm
+
+
+def _extract_text(raw_response: BaseMessage) -> str:
+    content = getattr(raw_response, "content", "")
+    if isinstance(content, str):
+        return content
+    return str(content)
+
+
+def _extract_tokens(raw_response: BaseMessage) -> int | None:
+    usage = getattr(raw_response, "usage_metadata", None)
+    if not isinstance(usage, dict):
+        logger.warning("Watsonx response does not contain usage_metadata for token count.")
+        return None
+
+    in_toks = usage.get("input_tokens")
+    out_toks = usage.get("output_tokens")
+
+    if in_toks is None and out_toks is None:
+        logger.warning(
+            "Watsonx usage_metadata found, but input_tokens/output_tokens are missing or None."
+        )
+        return None
+
+    total = (in_toks or 0) + (out_toks or 0)
+    logger.debug(
+        "Watsonx tokens received via LangChain: Total=%d (Input=%s, Output=%s)",
+        total,
+        in_toks,
+        out_toks,
+    )
+    return total
 
 
 def generate_text(prompt: str) -> Tuple[str, int | None]:
-    """
-    Unified interface for sql_baseline:
-    returns (text, tokens) where tokens may be None if usage isn't available.
-    """
-    resp = _model.generate_text(prompt=prompt)
+    llm = _get_llm()
 
-    # main generated text
-    text = ""
-    if isinstance(resp, dict):
-        results = resp.get("results") or []
-        if results and isinstance(results, list):
-            text = results[0].get("generated_text", "") or ""
-    else:
-        # if not a dict, try to convert to string
-        text = str(resp)
+    try:
+        raw_response = llm.invoke(prompt)
+    except Exception as e:
+        logger.error("Watsonx LangChain generate_text failed: %s", e)
+        raise
 
-    # token amounts if SDK returns usage
-    tokens = None
-    if isinstance(resp, dict):
-        usage = resp.get("usage") or {}
-        in_toks = usage.get("input_tokens")
-        out_toks = usage.get("output_tokens")
-        if in_toks is not None or out_toks is not None:
-            tokens = (in_toks or 0) + (out_toks or 0)
+    text = _extract_text(raw_response)
+    tokens = _extract_tokens(raw_response)
 
     return text, tokens
