@@ -9,9 +9,6 @@ from importlib import import_module
 from pathlib import Path
 from typing import List, Dict, Any, Callable
 
-from pydantic import BaseModel, Field
-from langchain_core.output_parsers import PydanticOutputParser
-
 from .common import discover_datasets, read_nl_queries
 
 logger = logging.getLogger(__name__)
@@ -21,12 +18,6 @@ DATA_ROOT = Path("data")
 OUT_ROOT = Path("nl_baseline_results")
 PROVIDER_CHOICES = ("azure", "gemini", "watsonx")
 
-
-class Response(BaseModel):
-    result_set: List[Dict[str, Any]] = Field(
-        default_factory=list,
-        description="List of result records, each as a {column_name: value} dict.",
-    )
 
 def _load_provider(name: str) -> Callable[[str], Any]:
     try:
@@ -57,18 +48,22 @@ def _strip_markdown_fences(text: str) -> str:
 
 def _build_prompt(nl_query: str) -> str:
     prompt = f"""
-    Answer the following query by giving a JSON array.
+You are an expert assistant.
+Answer the following question using ONLY your internal knowledge.
 
-    Query:
-    {nl_query}
+Question:
+{nl_query}
 
-    """.strip()
+Return the answer STRICTLY as a JSON array of objects.
+Do NOT include explanations, comments, or text outside the JSON.
+Return ONLY the JSON array.
+""".strip()
 
     return prompt
 
 
 def _try_extract_json(text: str) -> List[Dict[str, Any]]:
-    text = text.strip()
+    text = _strip_markdown_fences(text.strip())
 
     # 1) direct parse
     try:
@@ -115,9 +110,14 @@ def run_nl_baseline_for_dataset(dataset: str, llm_fn: Callable[[str], Any]) -> N
     out_dir = OUT_ROOT / dataset.upper()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    queries: List[str] = read_nl_queries(ds_dir)
+    try:
+        queries: List[str] = read_nl_queries(ds_dir)
+    except FileNotFoundError as e:
+        logger.warning(f"No NL queries found for dataset {dataset}: {e}")
+        return
+
     if not queries:
-        logger.warning(f"No queries_*.sql (NL files) found for dataset {dataset}")
+        logger.warning(f"No NL queries loaded for dataset {dataset}")
         return
 
     logger.info(f"[NL baseline] Dataset: {dataset} ({len(queries)} queries)")
@@ -127,7 +127,7 @@ def run_nl_baseline_for_dataset(dataset: str, llm_fn: Callable[[str], Any]) -> N
         prompt = _build_prompt(query)
 
         elapsed = None
-        tokens = None
+        tokens: Any = None
 
         try:
             t0 = time.time()
@@ -143,18 +143,8 @@ def run_nl_baseline_for_dataset(dataset: str, llm_fn: Callable[[str], Any]) -> N
             logger.error(f"[{dataset}] Q{i} – LLM call failed: {e}")
             data: Dict[str, Any] = {"_error": str(e), "prompt": prompt}
         else:
-            try:
-                parsed: Response = PARSER.parse(
-                    _strip_markdown_fences(str(raw_answer))
-                )
-                data = {"result_set": parsed.result_set}
-            except Exception as e:
-                logger.warning(
-                    f"[{dataset}] Q{i} – Pydantic parsing failed "
-                    f"({type(e).__name__}), falling back to simple JSON extraction."
-                )
-                rs = _try_extract_json(str(raw_answer))
-                data = {"result_set": rs}
+            rs = _try_extract_json(str(raw_answer))
+            data = {"result_set": rs}
 
         if isinstance(data, dict):
             data.setdefault("tokens", tokens)
