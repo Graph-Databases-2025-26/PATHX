@@ -1,7 +1,7 @@
-PWD d:\GRAPH DATABASE\pathX\PathX\reports\HW2
+PWD d:\GRAPH DATABASE\pathX\PathX\reports\PATHX_HW2
 INPUT C:\Users\Bita\AppData\Local\MiKTeX\miktex\data\le\pdftex\pdflatex.fmt
-INPUT d:\GRAPH DATABASE\pathX\PathX\reports\HW2\HW2_report.tex
-OUTPUT HW2_report.log
+INPUT d:\GRAPH DATABASE\pathX\PathX\reports\PATHX_HW2\PATHX_HW2.tex
+OUTPUT PATHX_HW2.log
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\tex\latex\base\article.cls
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\tex\latex\base\article.cls
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\tex\latex\base\size12.clo
@@ -98,10 +98,10 @@ INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\tex\latex\tools\array.sty
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\tex\latex\tools\array.sty
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\tex\latex\l3backend\l3backend-pdftex.def
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\tex\latex\l3backend\l3backend-pdftex.def
-INPUT .\HW2_report.aux
-INPUT .\HW2_report.aux
-INPUT HW2_report.aux
-OUTPUT HW2_report.aux
+INPUT .\PATHX_HW2.aux
+INPUT .\PATHX_HW2.aux
+INPUT PATHX_HW2.aux
+OUTPUT PATHX_HW2.aux
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\tex\context\base\mkii\supp-pdf.mkii
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\tex\context\base\mkii\supp-pdf.mkii
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\tex\context\base\mkii\supp-pdf.mkii
@@ -110,14 +110,14 @@ INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\tex\latex\epstopdf-pkg\epstopd
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\tex\latex\00miktex\epstopdf-sys.cfg
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\tex\latex\00miktex\epstopdf-sys.cfg
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\tex\latex\00miktex\epstopdf-sys.cfg
-INPUT .\HW2_report.out
-INPUT .\HW2_report.out
-INPUT HW2_report.out
-INPUT HW2_report.out
-OUTPUT HW2_report.pdf
-INPUT .\HW2_report.out
-INPUT .\HW2_report.out
-OUTPUT HW2_report.out
+INPUT .\PATHX_HW2.out
+INPUT .\PATHX_HW2.out
+INPUT PATHX_HW2.out
+INPUT PATHX_HW2.out
+OUTPUT PATHX_HW2.pdf
+INPUT .\PATHX_HW2.out
+INPUT .\PATHX_HW2.out
+OUTPUT PATHX_HW2.out
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmr17.tfm
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmr12.tfm
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmmi12.tfm
@@ -145,9 +145,9 @@ INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmsy6.tfm
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\fonts\tfm\public\cm\cmex10.tfm
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\fonts\tfm\public\amsfonts\cmextra\cmex8.tfm
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\fonts\tfm\public\amsfonts\cmextra\cmex7.tfm
-INPUT HW2_report.aux
-INPUT .\HW2_report.out
-INPUT .\HW2_report.out
+INPUT PATHX_HW2.aux
+INPUT .\PATHX_HW2.out
+INPUT .\PATHX_HW2.out
 INPUT C:\Users\Bita\AppData\Local\MiKTeX\fonts\pk\ljfour\jknappen\ec\dpi600\tcrm1200.pk
 INPUT C:\Users\Bita\AppData\Local\MiKTeX\fonts\pk\ljfour\jknappen\ec\dpi600\tcrm1200.pk
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\fonts\type1\public\amsfonts\cm\cmbx10.pfb
