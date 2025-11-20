@@ -26,7 +26,7 @@
 \begin{abstract}
 This project is part of the reproduction of the GALOIS system, which aims to improve SQL query execution over Large Language Models (LLMs). Since LLMs are increasingly used for structured information retrieval, it is important to understand how well they behave when treated as a ``virtual database.''
 
-In this phase, we implemented and evaluated some baseline methods: Natural language prompting, direct SQL prompting and few-shot prompting. These baselines were executed across three different LLM providers: Google Gemini, IBM WatsonX, and Azure OpenAI. The purpose of this report is to describe our methodology, the experimental setup, the results, and how this work prepares the ground for the next phase, where we will implement the optimized strategies introduced in the GALOIS framework.
+In this phase, we implemented and evaluated some baseline methods: Natural language prompting and direct SQL prompting. These baselines were executed across three different LLM providers: Google Gemini, IBM WatsonX, and Azure OpenAI. The purpose of this report is to describe our methodology, the experimental setup, the results, and how this work prepares the ground for the next phase, where we will implement the optimized strategies introduced in the GALOIS framework.
 \end{abstract}
 
 \section{Introduction}
@@ -90,10 +90,6 @@ We computed:
 \end{itemize}
 
 Additionally, we measured absolute and relative differences compared to the published numbers in paper.
-
-\section{Baseline Methods}
-
-The same three baselines were applied to all three LLM providers.
 
 \section{NL Baseline (Baseline 1)}
 
@@ -237,8 +233,7 @@ Prompts are constructed through \verb|build_prompt(strategy, dataset, sql)|, sel
    
 
     \item \verb|fewshot| – provides a set of positive (good) and negative (bad) examples of JSON outputs.  
-    The model is instructed to emulate the correct examples and avoid incorrect ones, leveraging demonstration-based learning to improve formatting reliability.  
-    This strategy is the default.  
+    The model is instructed to emulate the correct examples and avoid incorrect ones, leveraging demonstration-based learning to improve formatting reliability.   
     
     
 \end{itemize}
