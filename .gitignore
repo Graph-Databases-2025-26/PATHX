@@ -10,7 +10,6 @@ results/
 submissions/
 sql_baseline_results/
 nl_baseline_results/
-data/
 ground/
 db/
 *.duckdb
