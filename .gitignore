@@ -1,11 +1,9 @@
 # Python
 __pycache__/
-*.py[cod]
 .venv/
-env/
-*.db
-*.log
-*.json
+.env
+
+# Output directories
 results/
 submissions/
 sql_baseline_results/
@@ -13,11 +11,6 @@ nl_baseline_results/
 ground/
 db/
 *.duckdb
-
-# VS Code
-.vscode/
-
-.env
 
 # LaTeX artifacts
 *.aux
