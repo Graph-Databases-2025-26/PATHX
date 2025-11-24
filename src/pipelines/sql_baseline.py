@@ -15,6 +15,7 @@ from langchain_core.output_parsers import PydanticOutputParser
 
 from .common import discover_datasets, read_queries
 
+# Setup logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
@@ -27,6 +28,9 @@ PROVIDER_CHOICES = ("azure", "gemini", "watsonx")
 
 
 class Response(BaseModel):
+    """
+    Pydantic model for LLM response parsing.
+    """
     result_set: List[Dict[str, Any]] = Field(
         default_factory=list,
         description="List of result records, each as a {column_name: value} dict.",
@@ -37,6 +41,9 @@ PARSER = PydanticOutputParser(pydantic_object=Response)
 
 
 def _load_provider(name: str) -> Callable[[str], Any]:
+    """
+    Loads and returns the text generation function for the specified LLM provider.
+    """
     try:
         if name == "azure":
             return import_module("src.llm.azure_client").generate_text
@@ -50,6 +57,9 @@ def _load_provider(name: str) -> Callable[[str], Any]:
 
 
 def _strip_markdown_fences(text: str) -> str:
+    """
+    Strips markdown code fences from the given text.
+    """
     if text is None:
         return ""
     text = text.strip()
@@ -68,6 +78,9 @@ def _strip_markdown_fences(text: str) -> str:
 
 
 def _try_extract_json(text: str) -> Any:
+    """
+    Tries to extract a JSON array or object from the given text.
+    """
     text = _strip_markdown_fences(text)
     text = text.strip()
 
@@ -102,10 +115,16 @@ def _try_extract_json(text: str) -> Any:
 
 
 def _dataset_dir(name: str) -> Path:
+    """
+    Returns the path to the dataset directory for the given dataset name.
+    """
     return DATA_ROOT / name
 
 
 def _load_prompt_template(strategy: str) -> str:
+    """
+    Loads and returns the prompt template for the given strategy.
+    """
     prompt_file = PROMPTS_ROOT / PROMPT_FILENAME_TEMPLATE.format(strategy=strategy)
 
     if not prompt_file.exists():
@@ -126,8 +145,12 @@ def _load_prompt_template(strategy: str) -> str:
 
 
 def build_prompt(strategy: str, dataset: str, sql: str) -> str:
+    """
+    Builds and returns the prompt for the LLM based on the strategy, dataset, and SQL query.
+    """
     template = _load_prompt_template(strategy)
 
+    # Format the base prompt
     try:
         base_prompt = template.format(dataset=dataset, sql=sql).strip()
     except KeyError as e:
@@ -136,9 +159,10 @@ def build_prompt(strategy: str, dataset: str, sql: str) -> str:
             f"Check the template file content."
         )
 
+    # Get format instructions from the parser
     format_instructions = PARSER.get_format_instructions()
 
-
+    # Combine base prompt and format instructions
     full_prompt = (
         f"{base_prompt}\n\n"
         f"{format_instructions}\n\n"
@@ -153,6 +177,11 @@ def run_sql_baseline_for_dataset(
     strategy: str,
     llm_fn: Callable[[str], Any],
 ) -> None:
+    """
+    Runs the SQL baseline for the specified dataset using the given strategy and LLM function.
+    """
+
+    # Prepare dataset paths
     ds_dir = _dataset_dir(dataset)
     if not ds_dir.exists():
         logger.error(f"Dataset directory not found: {ds_dir}")
@@ -161,16 +190,20 @@ def run_sql_baseline_for_dataset(
     out_dir = OUT_ROOT / dataset.upper()
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # Load SQL queries
     sqls: List[str] = read_queries(ds_dir)
     if not sqls:
         logger.warning(f"No queries_*.sql found for dataset {dataset}")
         return
 
+    # Log dataset and strategy information
     logger.info(f"[SQL baseline] Dataset: {dataset} ({len(sqls)} queries), strategy={strategy}")
 
+    # Process each query
     for i, sql in enumerate(sqls, start=1):
         logger.info(f"[{dataset}] Q{i}/{len(sqls)}")
 
+        # Build the prompt for the current query
         try:
             prompt = build_prompt(strategy, dataset, sql)
         except (FileNotFoundError, IOError, ValueError) as e:
@@ -216,6 +249,7 @@ def run_sql_baseline_for_dataset(
             data["time"] = None
             data["tokens"] = None
 
+        # Write output file
         out_path = out_dir / f"query{i}.json"
         out_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         logger.info(f"[{dataset}] Q{i} → {out_path}")

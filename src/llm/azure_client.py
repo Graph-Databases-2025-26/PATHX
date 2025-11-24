@@ -11,6 +11,9 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 def _build_client() -> AzureOpenAI:
+    """ 
+    Builds and returns an Azure OpenAI client using environment variables. 
+    """
     endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
     api_key = os.getenv("AZURE_OPENAI_API_KEY")
     api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-21")

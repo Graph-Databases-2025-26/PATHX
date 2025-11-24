@@ -9,6 +9,9 @@ DATA = Path("data")
 SUB  = Path("submissions")
 
 def run_queries(dataset: str, schema="target"):
+    """
+    Runs the SQL queries for the specified dataset and saves the results.
+    """
     ds_dir = DATA / dataset
     out_dir = SUB / dataset.upper()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -16,6 +19,7 @@ def run_queries(dataset: str, schema="target"):
     con = connect_dataset_db(dataset, persist=True)
     ingest_dataset(con, ds_dir, schema=schema)
 
+    # Execute each query and save results
     for i, sql in enumerate(read_queries(ds_dir), 1):
         t0 = time.time()
         rows, err = [], None

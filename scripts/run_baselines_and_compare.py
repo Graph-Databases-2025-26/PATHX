@@ -13,12 +13,15 @@ PROVIDER_CHOICES = ("azure", "gemini", "watsonx")
 
 
 def run_step(name: str, command: list[str]):
+    """
+    Runs a subprocess command with logging and error handling.
+    """
     print("\n" + "=" * 80)
     print(f"▶ Running step: {name}")
     print("=" * 80)
     print("$", " ".join(command))
 
-    try:
+    try: 
         subprocess.run(
             command,
             cwd=ROOT,
@@ -26,12 +29,16 @@ def run_step(name: str, command: list[str]):
             check=True,
         )
         print(f"\n✓ {name} completed successfully.")
+
     except subprocess.CalledProcessError as e:
         print(f"\n✗ ERROR during '{name}' (exit code {e.returncode})")
         sys.exit(e.returncode)
 
 
 def build_nl_command(args: argparse.Namespace) -> list[str]:
+    """
+    Builds the command to run the NL baseline.
+    """
     cmd = ["python", "-m", NL_MODULE]
 
     if args.datasets:
@@ -47,6 +54,9 @@ def build_nl_command(args: argparse.Namespace) -> list[str]:
 
 
 def build_sql_command(args: argparse.Namespace) -> list[str]:
+    """
+    Builds the command to run the SQL baseline.
+    """
     cmd = ["python", "-m", SQL_MODULE]
 
     if args.datasets:
@@ -62,6 +72,9 @@ def build_sql_command(args: argparse.Namespace) -> list[str]:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
+    """
+    Builds the argument parser for the script.
+    """
     ap = argparse.ArgumentParser(
         description="Run NL baseline, SQL baseline, and comparison."
     )
@@ -113,10 +126,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main():
-    parser = build_arg_parser()
+
+    parser = build_arg_parser() 
     args = parser.parse_args()
 
-    # Только сравнение
+    # Handle compare-only mode
     if args.compare_only:
         print("\n[INFO] Running in compare-only mode.")
         run_step("Compare Results", ["python", "-m", COMPARE_MODULE])

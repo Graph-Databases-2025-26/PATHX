@@ -5,6 +5,9 @@ import re
 DATA = Path("data")
 
 def discover_datasets() -> list[str]:
+    """
+    Discovers and returns a list of dataset directory names in the DATA directory.
+    """
     out: list[str] = []
     for p in sorted(DATA.iterdir()):
         if p.is_dir() and not p.name.startswith("."):
@@ -12,6 +15,9 @@ def discover_datasets() -> list[str]:
     return out
 
 def read_queries(ds_dir: Path) -> list[str]:
+    """
+    Reads and returns SQL queries from the specified dataset directory.
+    """
     qfiles = sorted(ds_dir.glob("queries*.sql")) or sorted(ds_dir.glob("queries_*.sql"))
     if not qfiles:
         raise FileNotFoundError(f"No queries_*.sql found in {ds_dir}")
@@ -31,6 +37,9 @@ def read_queries(ds_dir: Path) -> list[str]:
     return stmts
 
 def read_nl_queries(ds_dir: Path) -> list[str]:
+    """
+    Reads and returns natural language queries from the specified dataset directory.
+    """
     qfiles = sorted(ds_dir.glob("queries*.txt")) or sorted(ds_dir.glob("queries_*.txt"))
     if not qfiles:
         raise FileNotFoundError(f"No queries_*.txt found in {ds_dir}")

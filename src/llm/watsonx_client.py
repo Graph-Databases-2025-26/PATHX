@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
+# Load Watsonx configuration from environment variables
 WATSONX_API_KEY = os.getenv("WATSONX_API_KEY")
 WATSONX_URL = os.getenv("WATSONX_URL", "https://us-south.ml.cloud.ibm.com")
 WATSONX_PROJECT_ID = os.getenv("WATSONX_PROJECT_ID")
@@ -30,6 +31,9 @@ _llm: ChatWatsonx | None = None
 
 
 def _get_llm() -> ChatWatsonx:
+    """
+    Creates and returns the LangChain ChatWatsonx client.
+    """
     global _llm
     if _llm is None:
         logger.info("Creating LangChain ChatWatsonx client...")
@@ -44,6 +48,9 @@ def _get_llm() -> ChatWatsonx:
 
 
 def _extract_text(raw_response: BaseMessage) -> str:
+    """
+    Extracts and returns the generated text from a Watsonx response.
+    """
     content = getattr(raw_response, "content", "")
     if isinstance(content, str):
         return content
@@ -51,6 +58,9 @@ def _extract_text(raw_response: BaseMessage) -> str:
 
 
 def _extract_tokens(raw_response: BaseMessage) -> int | None:
+    """
+    Extracts and returns the total token count from a Watsonx response, if available.
+    """
     usage = getattr(raw_response, "usage_metadata", None)
     if not isinstance(usage, dict):
         logger.warning("Watsonx response does not contain usage_metadata for token count.")
@@ -76,6 +86,9 @@ def _extract_tokens(raw_response: BaseMessage) -> int | None:
 
 
 def generate_text(prompt: str) -> Tuple[str, int | None]:
+    """
+    Sends a prompt to the Watsonx generative model and returns the generated text and token count
+    """
     llm = _get_llm()
 
     try:

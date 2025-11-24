@@ -40,6 +40,10 @@ METRICS_ORDER = [
 
 
 def run_galois_evaluation(submissions_path: str, baseline_name: str) -> dict:
+    """
+    Runs the galois_eval.py script on the specified submissions path
+    and returns a dictionary of evaluation metrics.
+    """
     if not os.path.exists(GALOIS_SCRIPT_PATH):
         print(f"ERROR: GALOIS script not found at {GALOIS_SCRIPT_PATH}")
         return {}
@@ -104,6 +108,9 @@ def run_galois_evaluation(submissions_path: str, baseline_name: str) -> dict:
 
 
 def generate_report_table(our_nl_results: dict, our_sql_results: dict):
+    """
+    Generates and prints a comparison report table between paper results and our results.
+    """
     report_data = []
 
     for metric in METRICS_ORDER:
@@ -121,6 +128,9 @@ def generate_report_table(our_nl_results: dict, our_sql_results: dict):
         rel_sql = ((our_sql - paper_sql) / paper_sql * 100.0) if (paper_sql not in (None, 0)) else None
 
         def fmt_val(val, metric_name: str, num_decimals=3):
+            """
+            Formats the metric value for display.
+            """
             if val is None:
                 return ""
             if metric_name in ("#Tokens (M)", "Avg Time"):
@@ -128,6 +138,9 @@ def generate_report_table(our_nl_results: dict, our_sql_results: dict):
             return f"{val:,.{num_decimals}f}"
 
         def fmt_pct(val):
+            """
+            Formats the percentage value for display.
+            """
             if val is None:
                 return ""
             return f"{val:+.1f}%"
@@ -160,16 +173,20 @@ def generate_report_table(our_nl_results: dict, our_sql_results: dict):
 
 
 if __name__ == "__main__":
+
+    # Run evaluations for NL baseline
     our_nl_results = run_galois_evaluation(NL_SUBMISSIONS_ROOT, "NL")
 
     if not our_nl_results:
         print("\nUsing default NL results (0.0) for report generation.")
         our_nl_results = {m: 0.0 for m in METRICS_ORDER}
 
+    # Run evaluations for SQL baseline
     our_sql_results = run_galois_evaluation(SQL_SUBMISSIONS_ROOT, "SQL")
 
     if not our_sql_results:
         print("Using default SQL results (0.0) for report generation.")
         our_sql_results = {m: 0.0 for m in METRICS_ORDER}
 
+    # Generate and print the report table
     generate_report_table(our_nl_results, our_sql_results)

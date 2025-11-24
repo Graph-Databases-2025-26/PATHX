@@ -20,6 +20,9 @@ PROVIDER_CHOICES = ("azure", "gemini", "watsonx")
 
 
 def _load_provider(name: str) -> Callable[[str], Any]:
+    """
+    Loads and returns the text generation function for the specified LLM provider.
+    """
     try:
         if name == "azure":
             return import_module("src.llm.azure_client").generate_text
@@ -33,6 +36,9 @@ def _load_provider(name: str) -> Callable[[str], Any]:
 
 
 def _strip_markdown_fences(text: str) -> str:
+    """
+    Strips markdown code fences from the given text.
+    """
     if text is None:
         return ""
     text = text.strip()
@@ -47,6 +53,9 @@ def _strip_markdown_fences(text: str) -> str:
 
 
 def _build_prompt(nl_query: str) -> str:
+    """
+    Builds and returns the prompt for the LLM based on the natural language query.
+    """
     prompt = f"""
 You are an expert assistant.
 Answer the following question using ONLY your internal knowledge.
@@ -63,6 +72,9 @@ Return ONLY the JSON array.
 
 
 def _try_extract_json(text: str) -> List[Dict[str, Any]]:
+    """
+    Tries to extract a JSON array from the given text.
+    """
     text = _strip_markdown_fences(text.strip())
 
     # 1) direct parse
@@ -98,10 +110,18 @@ def _try_extract_json(text: str) -> List[Dict[str, Any]]:
 
 
 def _dataset_dir(name: str) -> Path:
+    """
+    Returns the path to the dataset directory for the given dataset name.
+    """
     return DATA_ROOT / name
 
 
 def run_nl_baseline_for_dataset(dataset: str, llm_fn: Callable[[str], Any]) -> None:
+    """
+    Runs the NL baseline for the specified dataset using the given LLM function.
+    """
+
+    # Prepare dataset paths
     ds_dir = _dataset_dir(dataset)
     if not ds_dir.exists():
         logger.error(f"Dataset directory not found: {ds_dir}")
@@ -110,6 +130,7 @@ def run_nl_baseline_for_dataset(dataset: str, llm_fn: Callable[[str], Any]) -> N
     out_dir = OUT_ROOT / dataset.upper()
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # Load NL queries
     try:
         queries: List[str] = read_nl_queries(ds_dir)
     except FileNotFoundError as e:
@@ -122,6 +143,7 @@ def run_nl_baseline_for_dataset(dataset: str, llm_fn: Callable[[str], Any]) -> N
 
     logger.info(f"[NL baseline] Dataset: {dataset} ({len(queries)} queries)")
 
+    # Process each query
     for i, query in enumerate(queries, start=1):
         logger.info(f"[{dataset}] Q{i}/{len(queries)}")
         prompt = _build_prompt(query)
@@ -129,6 +151,7 @@ def run_nl_baseline_for_dataset(dataset: str, llm_fn: Callable[[str], Any]) -> N
         elapsed = None
         tokens: Any = None
 
+        # Call the LLM function with timing
         try:
             t0 = time.time()
             result = llm_fn(prompt)
@@ -146,10 +169,12 @@ def run_nl_baseline_for_dataset(dataset: str, llm_fn: Callable[[str], Any]) -> N
             rs = _try_extract_json(str(raw_answer))
             data = {"result_set": rs}
 
+        # Add metadata
         if isinstance(data, dict):
             data.setdefault("tokens", tokens)
             data["time"] = round(elapsed, 3) if elapsed is not None else None
 
+        # Write output file
         out_path = out_dir / f"query{i}.json"
         out_path.write_text(
             json.dumps(data, ensure_ascii=False, indent=2),
@@ -159,6 +184,7 @@ def run_nl_baseline_for_dataset(dataset: str, llm_fn: Callable[[str], Any]) -> N
 
 
 def main() -> None:
+
     ap = argparse.ArgumentParser(
         description="Run NL baseline (Baseline 2) with select LLM backend."
     )
