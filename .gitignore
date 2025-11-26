@@ -12,6 +12,12 @@ ground/
 db/
 *.duckdb
 
+# Baseline-specific output directories
+nl_baseline_azure/
+nl_baseline_gemini/
+sql_baseline_azure/
+sql_baseline_gemini/
+
 # LaTeX artifacts
 *.aux
 *.lof
