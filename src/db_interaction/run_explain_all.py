@@ -1,9 +1,10 @@
 from pathlib import Path
 import sys
-from src.utils.explain_export import save_both
-from src.pipelines.common import discover_datasets, read_queries
-from src.db_interaction.duckdb_client import connect_dataset_db, ingest_dataset
-from src.utils.logging import logger
+
+from .duckdb_client import connect_dataset_db, ingest_dataset
+from ..utils.explain_export import save_both
+from ..utils.dataset_io import discover_datasets, read_queries
+from ..utils.logging import logger
 
 
 def process_dataset(dataset: str):
