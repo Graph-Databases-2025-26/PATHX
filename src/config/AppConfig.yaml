@@ -46,7 +46,7 @@ iterative:
 
 logging:
   level: "INFO"
-  json: false
+  as_json: false
 
 
 evaluation:

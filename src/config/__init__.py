@@ -6,6 +6,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 import yaml
 from pydantic import BaseModel
+from .config import load_config, AppConfig
+
 
 
 load_dotenv()
@@ -57,7 +59,7 @@ class IterativeConfig(BaseModel):
 
 class LoggingConfig(BaseModel):
     level: str
-    json: bool
+    as_json: bool
 
 
 class EvaluationConfig(BaseModel):

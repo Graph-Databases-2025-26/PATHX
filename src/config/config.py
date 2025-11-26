@@ -55,7 +55,7 @@ class IterativeConfig(BaseModel):
 
 class LoggingConfig(BaseModel):
     level: str
-    json: bool
+    as_json: bool
 
 
 class EvaluationConfig(BaseModel):
@@ -80,7 +80,7 @@ class AppConfig(BaseModel):
     evaluation: EvaluationConfig
 
     @classmethod
-    def load(cls, path: str = "config/AppConfig.yaml") -> "AppConfig":
+    def load(cls, path: str = "src/config/AppConfig.yaml") -> "AppConfig":
         """
         Load YAML, substitute ${ENV_VARS} and validate with Pydantic
         """
