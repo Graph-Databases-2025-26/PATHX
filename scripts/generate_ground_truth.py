@@ -3,8 +3,8 @@ Steps:
   1) Build ground truth
   2) Ingest datasets -> DuckDB files
   3) Run queries -> submissions
-  4) Export EXPLAIN (txt + analyze/plan в results/)
-  5) Evaluate (baseline == ground) или ground vs submissions
+  4) Export EXPLAIN (txt + analyze/plan to results/)
+  5) Evaluate (baseline == ground) or ground vs submissions
 
 Examples:
   python scripts/run_all.py
