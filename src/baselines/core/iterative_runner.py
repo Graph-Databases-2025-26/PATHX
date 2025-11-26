@@ -118,8 +118,14 @@ def run_iterative_baseline(
 
     # follow-up iterations
     for i in range(1, max_iters + 1):
+        followup_payload = {
+            "dataset": initial_payload["database"],
+            "nl_question": initial_payload.get("nl_question"),
+            "sql": initial_payload.get("sql"),
+            "previous_rows": all_rows,
+        }
         t0 = time.time()
-        raw_next = followup_chain.invoke({})
+        raw_next = followup_chain.invoke(followup_payload)
         elapsed = time.time() - t0
 
         iter_tokens = _extract_total_tokens(raw_next)

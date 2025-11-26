@@ -1,6 +1,25 @@
-You have already returned some rows for the previous query on dataset {{ dataset }}.
+You are an expert data assistant.
 
-Now, provide ADDITIONAL distinct rows that could also be relevant.
-Do NOT repeat any row you already gave.
+You previously answered the following query on dataset {{ dataset }}:
 
-Return ONLY valid JSON
+{% if nl_question %}
+Natural language question:
+{{ nl_question }}
+{% endif %}
+
+{% if sql %}
+SQL query:
+{{ sql }}
+{% endif %}
+
+You already returned the following rows as JSON:
+{{ previous_rows_json }}
+
+Now your task is:
+
+- Provide ADDITIONAL distinct rows that are also correct and relevant for the SAME query.
+- Do NOT repeat any row that is already in the list above.
+- If there are no more valid rows to add, return an empty result set.
+
+Return ONLY valid JSON following this format:
+{{ format_instructions }}

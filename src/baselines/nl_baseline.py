@@ -60,7 +60,7 @@ def run_nl_baseline_for_dataset(
     )
 
     initial_chain = build_lcel_chain(llm_wrapper, baseline_type="NL")
-    followup_chain = build_followup_chain(llm_wrapper)
+    followup_chain = build_followup_chain(llm_wrapper, baseline_type="NL")
 
     # 3) Run baseline query-by-query
     for idx, question in enumerate(nl_queries, start=1):

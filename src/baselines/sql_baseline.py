@@ -36,7 +36,7 @@ def run_sql_baseline_for_dataset(
     provider_name = llm.get_provider_name()
 
     initial_chain = build_lcel_chain(llm, baseline_type="SQL")
-    followup_chain = build_followup_chain(llm)
+    followup_chain = build_followup_chain(llm, baseline_type="SQL")
 
     ds_dir = Path("data") / dataset
     if not ds_dir.exists():

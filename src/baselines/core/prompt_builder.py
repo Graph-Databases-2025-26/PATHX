@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -57,7 +58,22 @@ def build_nl_prompt(
     return _render(template, ctx)
 
 
-def build_followup_prompt() -> str:
+def build_followup_prompt(
+    dataset: str,
+    previous_rows: List[Dict[str, Any]],
+    nl_question: str | None = None,
+    sql: str | None = None,
+) -> str:
     format_instructions = PARSER.get_format_instructions()
     template = "common/followup.j2"
-    return _render(template, {"format_instructions": format_instructions})
+
+    previous_rows_json = json.dumps(previous_rows, ensure_ascii=False, indent=2)
+
+    ctx = {
+        "dataset": dataset,
+        "nl_question": nl_question,
+        "sql": sql,
+        "previous_rows_json": previous_rows_json,
+        "format_instructions": format_instructions,
+    }
+    return _render(template, ctx)

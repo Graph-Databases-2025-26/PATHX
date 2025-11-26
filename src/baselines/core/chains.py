@@ -43,14 +43,30 @@ def build_lcel_chain(
     return db_ctx | prompt_builder | chat_prompt | llm
 
 
-def build_followup_chain(llm_wrapper: LLMBaseWrapper):
+def build_followup_chain(llm_wrapper: LLMBaseWrapper, baseline_type: Literal["SQL", "NL"]):
     """
     Follow-up chain for 'more results'.
-    The key here is to prevent ChatPromptTemplate from seeing the JSON curly braces.
+    Теперь он получает контекст (dataset, nl/sql, previous_rows) на вход.
     """
-    followup_prompt = build_followup_prompt()
 
-    base_prompt = ChatPromptTemplate.from_messages([
+    def _build_followup_from_context(ctx: dict) -> dict:
+        dataset = ctx["dataset"]
+        previous_rows = ctx["previous_rows"]
+
+        nl_question = ctx.get("nl_question")
+        sql = ctx.get("sql")
+
+        prompt = build_followup_prompt(
+            dataset=dataset,
+            previous_rows=previous_rows,
+            nl_question=nl_question if baseline_type == "NL" else None,
+            sql=sql if baseline_type == "SQL" else None,
+        )
+        return {"prompt": prompt}
+
+    prompt_builder = RunnableLambda(_build_followup_from_context)
+
+    chat_prompt = ChatPromptTemplate.from_messages([
         HumanMessagePromptTemplate(
             prompt=PromptTemplate(
                 input_variables=["prompt"],
@@ -59,7 +75,6 @@ def build_followup_chain(llm_wrapper: LLMBaseWrapper):
         )
     ])
 
-    chat_prompt = base_prompt.partial(prompt=followup_prompt)
-
     llm = llm_wrapper.get_llm_instance()
-    return chat_prompt | llm
+    return prompt_builder | chat_prompt | llm
+
