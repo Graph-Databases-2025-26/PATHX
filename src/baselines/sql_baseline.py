@@ -5,12 +5,12 @@ import logging
 from pathlib import Path
 
 from ..utils.dataset_io import discover_datasets, read_queries
+from ..config.config import load_config, AppConfig
 from .llm_factory import get_llm_wrapper
 from .core.chains import build_lcel_chain, build_followup_chain
 from .core.iterative_runner import run_iterative_baseline
 from .core.output_io import save_query_result_json
 
-from config import load_config, AppConfig
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
