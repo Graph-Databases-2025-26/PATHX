@@ -40,7 +40,7 @@ io:
 
 
 iterative:
-  max_iters: 5
+  max_iters: 10
   stop_if_no_new: true
 
 

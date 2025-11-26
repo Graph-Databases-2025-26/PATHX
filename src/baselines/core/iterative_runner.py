@@ -9,15 +9,54 @@ from .parsing import parse_llm_response
 logger = logging.getLogger(__name__)
 
 
-def _tuples_signature(rows: List[Dict[str, Any]]) -> Set[Tuple]:
+def _make_hashable(value: Any) -> Any:
     """
-    Signature for each row to detect duplicates.
+    Convert any JSON-like value into a hashable form.
+    - list/tuple -> tuple with recursive processing
+    - dict -> sorted tuple (key, value) with recursive processing
+    - scalars -> as is
+    - everything else -> string representation
     """
-    sigs: Set[Tuple] = set()
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, (list, tuple)):
+        return tuple(_make_hashable(v) for v in value)
+    if isinstance(value, dict):
+        return tuple((k, _make_hashable(v)) for k, v in sorted(value.items()))
+    return repr(value)
+
+
+def _row_signature(row: Dict[str, Any]) -> Tuple:
+    """
+    Stable, hashable signature for a single row.
+    The order of keys does not matter, inner structures are also made hashable.
+    """
+    items = [(k, _make_hashable(v)) for k, v in row.items()]
+    return tuple(sorted(items))
+
+
+def _filter_new_rows(
+    rows: List[Dict[str, Any]],
+    seen: Set[Tuple],
+) -> List[Dict[str, Any]]:
+    """
+    Leaves only new rows not in seen.
+    The order of rows is preserved.
+    """
+    new_rows: List[Dict[str, Any]] = []
+
     for row in rows:
-        if isinstance(row, dict):
-            sigs.add(tuple(sorted(row.items())))
-    return sigs
+        if not isinstance(row, dict):
+            continue
+
+        sig = _row_signature(row)
+        if sig in seen:
+            continue
+
+        seen.add(sig)
+        new_rows.append(row)
+
+    return new_rows
 
 
 def _extract_total_tokens(raw_response) -> int:
@@ -26,23 +65,20 @@ def _extract_total_tokens(raw_response) -> int:
     Works for watsonx, Azure (usage) and Gemini (usage_metadata).
     Falls back to 0 if no metadata is available.
     """
-    # Preferred: usage_metadata (watsonx, gemini)
     usage_meta = getattr(raw_response, "usage_metadata", None)
     if usage_meta:
-        inp = usage_meta.get("input_tokens", 0)
-        out = usage_meta.get("output_tokens", 0)
+        inp = usage_meta.get("input_tokens", 0) or 0
+        out = usage_meta.get("output_tokens", 0) or 0
         return int(inp) + int(out)
 
-    # Azure / OpenAI-style: raw_response.usage
     usage = getattr(raw_response, "usage", None)
     if usage is not None:
-        # Some SDKs expose as attributes, some as dict
         if hasattr(usage, "prompt_tokens") or hasattr(usage, "completion_tokens"):
-            inp = getattr(usage, "prompt_tokens", 0)
-            out = getattr(usage, "completion_tokens", 0)
+            inp = getattr(usage, "prompt_tokens", 0) or 0
+            out = getattr(usage, "completion_tokens", 0) or 0
         elif isinstance(usage, dict):
-            inp = usage.get("prompt_tokens", 0)
-            out = usage.get("completion_tokens", 0)
+            inp = usage.get("prompt_tokens", 0) or 0
+            out = usage.get("completion_tokens", 0) or 0
         else:
             inp = out = 0
         return int(inp) + int(out)
@@ -54,7 +90,7 @@ def run_iterative_baseline(
     initial_chain,
     followup_chain,
     initial_payload: Dict[str, Any],
-    max_iters: int = 5,
+    max_iters: int = 10,
 ) -> Dict[str, Any]:
     """
     Perform:
@@ -78,8 +114,8 @@ def run_iterative_baseline(
     all_rows: List[Dict[str, Any]] = []
     seen: Set[Tuple] = set()
 
-    total_tokens = 0
-    total_time = 0.0
+    total_tokens: int = 0
+    total_time: float = 0.0
     iterations_used = 0  # number of follow-up iterations that yielded new rows
 
     # initial call (iter=0)
@@ -88,8 +124,8 @@ def run_iterative_baseline(
     elapsed = time.time() - t0
 
     iter_tokens = _extract_total_tokens(raw_first)
-    total_time += elapsed
-    total_tokens += iter_tokens
+    total_time += float(elapsed or 0.0)
+    total_tokens += int(iter_tokens or 0)
 
     first_parsed = parse_llm_response(
         raw_answer=raw_first.content if hasattr(raw_first, "content") else raw_first,
@@ -99,13 +135,7 @@ def run_iterative_baseline(
     rows = first_parsed["result_set"]
 
     # deduplicate initial rows
-    sigs = _tuples_signature(rows)
-    new_rows = []
-    for row, sig in zip(rows, sigs):
-        if sig not in seen:
-            seen.add(sig)
-            new_rows.append(row)
-
+    new_rows = _filter_new_rows(rows, seen)
     all_rows.extend(new_rows)
 
     logger.info(
@@ -124,13 +154,14 @@ def run_iterative_baseline(
             "sql": initial_payload.get("sql"),
             "previous_rows": all_rows,
         }
+
         t0 = time.time()
         raw_next = followup_chain.invoke(followup_payload)
         elapsed = time.time() - t0
 
         iter_tokens = _extract_total_tokens(raw_next)
-        total_time += elapsed
-        total_tokens += iter_tokens
+        total_time += float(elapsed or 0.0)
+        total_tokens += int(iter_tokens or 0)
 
         parsed_next = parse_llm_response(
             raw_answer=raw_next.content if hasattr(raw_next, "content") else raw_next,
@@ -139,12 +170,7 @@ def run_iterative_baseline(
         )
         rows_next = parsed_next["result_set"]
 
-        sigs_next = _tuples_signature(rows_next)
-        only_new: List[Dict[str, Any]] = []
-        for row, sig in zip(rows_next, sigs_next):
-            if sig not in seen:
-                seen.add(sig)
-                only_new.append(row)
+        only_new = _filter_new_rows(rows_next, seen)
 
         logger.info(
             "[ITER] iter=%d: rows=%d, new=%d, time=%.3fs, tokens=%d",
@@ -164,7 +190,7 @@ def run_iterative_baseline(
 
     return {
         "result_set": all_rows,
-        "time": round(total_time, 3),
-        "tokens": int(total_tokens),
+        "time": round(float(total_time or 0.0), 3),
+        "tokens": int(total_tokens or 0),
         "meta": {"iterations_used": iterations_used},
     }
