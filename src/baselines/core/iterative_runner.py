@@ -1,57 +1,53 @@
 from __future__ import annotations
 
-import logging
 import time
+import logging
 from typing import Any, Dict, List, Set, Tuple
 
 from .parsing import parse_llm_response
 
 logger = logging.getLogger(__name__)
 
-def extract_tokens(obj: Any) -> int | None:
+
+def _tuples_signature(rows: List[Dict[str, Any]]) -> Set[Tuple]:
     """
-    Universal token extractor from LLM response objects.
+    Signature for each row to detect duplicates.
     """
-    if obj is None:
-        return None
-
-    # OpenAI / Azure
-    usage = getattr(obj, "usage", None)
-    if usage is not None:
-        for field in ["total_tokens", "completion_tokens", "output_tokens"]:
-            if hasattr(usage, field):
-                return getattr(usage, field)
-
-        if isinstance(usage, dict):
-            for field in ["total_tokens", "completion_tokens", "output_tokens"]:
-                if field in usage:
-                    return usage[field]
-
-    # Gemini / WatsonX
-    usage2 = getattr(obj, "usage_metadata", None)
-    if usage2 is not None:
-        for field in ["total_tokens", "output_tokens", "input_tokens"]:
-            if hasattr(usage2, field):
-                return getattr(usage2, field)
-
-        if isinstance(usage2, dict):
-            for field in ["total_tokens", "output_tokens"]:
-                if field in usage2:
-                    return usage2[field]
-
-    return None
- 
-def _tuples_signature(rows: List[Dict[str, Any]]) -> List[Tuple]:
-    """
-    Make each dict tuple(sorted(items)) for the comparison of tuples.
-    """
-    sigs: List[Tuple] = []
+    sigs: Set[Tuple] = set()
     for row in rows:
         if isinstance(row, dict):
-            sigs.append(tuple(sorted(row.items())))
-        else:
-            sigs.append((("__raw__", str(row)),))
+            sigs.add(tuple(sorted(row.items())))
     return sigs
+
+
+def _extract_total_tokens(raw_response) -> int:
+    """
+    Extract total tokens (input + output) for a single LLM call.
+    Works for watsonx, Azure (usage) and Gemini (usage_metadata).
+    Falls back to 0 if no metadata is available.
+    """
+    # Preferred: usage_metadata (watsonx, gemini)
+    usage_meta = getattr(raw_response, "usage_metadata", None)
+    if usage_meta:
+        inp = usage_meta.get("input_tokens", 0)
+        out = usage_meta.get("output_tokens", 0)
+        return int(inp) + int(out)
+
+    # Azure / OpenAI-style: raw_response.usage
+    usage = getattr(raw_response, "usage", None)
+    if usage is not None:
+        # Some SDKs expose as attributes, some as dict
+        if hasattr(usage, "prompt_tokens") or hasattr(usage, "completion_tokens"):
+            inp = getattr(usage, "prompt_tokens", 0)
+            out = getattr(usage, "completion_tokens", 0)
+        elif isinstance(usage, dict):
+            inp = usage.get("prompt_tokens", 0)
+            out = usage.get("completion_tokens", 0)
+        else:
+            inp = out = 0
+        return int(inp) + int(out)
+
+    return 0
 
 
 def run_iterative_baseline(
@@ -59,36 +55,51 @@ def run_iterative_baseline(
     followup_chain,
     initial_payload: Dict[str, Any],
     max_iters: int = 5,
-):
+) -> Dict[str, Any]:
     """
-    initial_chain.invoke(payload) makes first batch
-    followup_chain.invoke({}) makes follow-up iterations "more"
+    Perform:
+      - initial LLM call (iter=0)
+      - up to max_iters follow-up calls (iter=1..N)
+
+    Aggregates:
+      - all unique rows across iterations
+      - total wall-clock time (sum of per-call durations)
+      - total tokens (sum of input+output tokens for all calls)
+
+    Returns:
+      {
+        "result_set": [...],
+        "time": <total_time_seconds>,
+        "tokens": <total_tokens>,
+        "meta": { "iterations_used": <num_successful_followups> }
+      }
     """
+
     all_rows: List[Dict[str, Any]] = []
     seen: Set[Tuple] = set()
-    total_time = 0.0
-    total_tokens = 0
-    used_iters = 0
 
-    # First iteration
+    total_tokens = 0
+    total_time = 0.0
+    iterations_used = 0  # number of follow-up iterations that yielded new rows
+
+    # initial call (iter=0)
     t0 = time.time()
     raw_first = initial_chain.invoke(initial_payload)
-    elapsed_first = time.time() - t0
-    total_time += elapsed_first
+    elapsed = time.time() - t0
 
-    out_tokens = extract_tokens(raw_first)
-    if out_tokens:
-        total_tokens += out_tokens
+    iter_tokens = _extract_total_tokens(raw_first)
+    total_time += elapsed
+    total_tokens += iter_tokens
 
-    parsed_first = parse_llm_response(
-        raw_answer=getattr(raw_first, "content", raw_first),
-        elapsed=elapsed_first,
-        tokens=out_tokens,
+    first_parsed = parse_llm_response(
+        raw_answer=raw_first.content if hasattr(raw_first, "content") else raw_first,
+        elapsed=elapsed,
+        tokens=None,
     )
+    rows = first_parsed["result_set"]
 
-    rows = parsed_first["result_set"]
+    # deduplicate initial rows
     sigs = _tuples_signature(rows)
-
     new_rows = []
     for row, sig in zip(rows, sigs):
         if sig not in seen:
@@ -96,56 +107,58 @@ def run_iterative_baseline(
             new_rows.append(row)
 
     all_rows.extend(new_rows)
-    used_iters += 1
 
     logger.info(
-        f"[ITER] iter=0 (initial): rows={len(rows)}, new={len(new_rows)}, "
-        f"time={elapsed_first:.3f}s, tokens={out_tokens}"
+        "[ITER] iter=0 (initial): rows=%d, new=%d, time=%.3fs, tokens=%d",
+        len(rows),
+        len(new_rows),
+        elapsed,
+        iter_tokens,
     )
 
-    # Follow-up iterations
+    # follow-up iterations
     for i in range(1, max_iters + 1):
         t0 = time.time()
         raw_next = followup_chain.invoke({})
-        elapsed_next = time.time() - t0
-        total_time += elapsed_next
+        elapsed = time.time() - t0
 
-        next_tokens = extract_tokens(raw_next)
-        if next_tokens:
-            total_tokens += next_tokens
+        iter_tokens = _extract_total_tokens(raw_next)
+        total_time += elapsed
+        total_tokens += iter_tokens
 
         parsed_next = parse_llm_response(
-            raw_answer=getattr(raw_next, "content", raw_next),
-            elapsed=elapsed_next,
-            tokens=next_tokens,
+            raw_answer=raw_next.content if hasattr(raw_next, "content") else raw_next,
+            elapsed=elapsed,
+            tokens=None,
         )
-
         rows_next = parsed_next["result_set"]
-        sigs_next = _tuples_signature(rows_next)
 
-        only_new = []
+        sigs_next = _tuples_signature(rows_next)
+        only_new: List[Dict[str, Any]] = []
         for row, sig in zip(rows_next, sigs_next):
             if sig not in seen:
                 seen.add(sig)
                 only_new.append(row)
 
         logger.info(
-            f"[ITER] iter={i}: rows={len(rows_next)}, new={len(only_new)}, "
-            f"time={elapsed_next:.3f}s, tokens={next_tokens}"
+            "[ITER] iter=%d: rows=%d, new=%d, time=%.3fs, tokens=%d",
+            i,
+            len(rows_next),
+            len(only_new),
+            elapsed,
+            iter_tokens,
         )
 
         if not only_new:
-            logger.info(f"[ITER] stopping at iter={i}: no new rows")
+            logger.info("[ITER] stopping at iter=%d: no new rows", i)
             break
 
+        iterations_used += 1
         all_rows.extend(only_new)
-        used_iters += 1
 
     return {
         "result_set": all_rows,
         "time": round(total_time, 3),
-        "tokens": total_tokens,       # sum of output tokens
-        "meta": {
-            "iterations_used": used_iters,
-        },
+        "tokens": int(total_tokens),
+        "meta": {"iterations_used": iterations_used},
     }
