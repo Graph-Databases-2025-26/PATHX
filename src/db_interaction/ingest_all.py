@@ -4,16 +4,10 @@ import argparse
 from pathlib import Path
 import duckdb
 
-from duckdb_client import connect_dataset_db, ingest_dataset
+from .duckdb_client import connect_dataset_db, ingest_dataset
+from src.utils.dataset_io import discover_datasets
 
 DATA = Path("data")
-
-def discover_datasets() -> list[str]:
-    out: list[str] = []
-    for p in sorted(DATA.iterdir()):
-        if p.is_dir():
-            out.append(p.name)
-    return out
 
 def ingest_one(dataset: str, schema: str = "target", persist_db: bool = True) -> None:
     ds_dir = DATA / dataset

@@ -1,0 +1,60 @@
+llm_provider: "watsonx"       # watsonx | gemini | azure
+prompt_strategy: "direct"     # direct | zero_shot | few_shot
+
+
+watsonx:
+  api_key: "${WATSONX_API_KEY}"
+  endpoint: "${WATSONX_URL}"
+  project_id: "${WATSONX_PROJECT_ID}"
+  model: "${WATSONX_MODEL_ID}" 
+  temperature: ${WATSONX_TEMPERATURE}
+  max_tokens: ${WATSONX_MAX_NEW_TOKENS}
+
+gemini:
+  api_key: "${GEMINI_API_KEY}"
+  model: ${GEMINI_MODEL_NAME}
+  temperature: 0.0
+  max_output_tokens: 2048
+
+azure:
+  api_key: "${AZURE_OPENAI_API_KEY}"
+  endpoint: "${AZURE_OPENAI_ENDPOINT}"
+  deployment: "${AZURE_OPENAI_DEPLOYMENT}"
+  api_version: "${AZURE_OPENAI_API_VERSION}"
+  model: "${AZURE_OPENAI_DEPLOYMENT}"
+  temperature: 0.0
+  max_tokens: 2048
+
+
+database:
+  type: "duckdb"
+  db_dir: "./db"
+  data_dir: "./data"
+  ingest_on_demand: true
+
+
+io:
+  sql_output: "./sql_baseline_results"
+  nl_output: "./nl_baseline_results"
+  prompts_dir: "./src/baselines/prompts"
+
+
+iterative:
+  max_iters: 10
+  stop_if_no_new: true
+
+
+logging:
+  level: "INFO"
+  as_json: false
+
+
+evaluation:
+  enable: true
+  metrics:
+    - "f1_cell"
+    - "cardinality"
+    - "tuple_constraint"
+    - "avg_score"
+  output_format: "json"
+  aggregate: true

@@ -1,0 +1,19 @@
+You are an expert data assistant.
+
+Your task:
+Given the following natural language question, produce the answer
+STRICTLY as a JSON object with a single key "result_set".
+
+Format requirements:
+- Output MUST be a valid JSON object.
+- The JSON MUST have exactly one top-level key: "result_set".
+- "result_set" MUST be an array (possibly empty).
+- Each element of "result_set" MUST be a JSON object representing one row.
+- Keys MUST be meaningful column or attribute names
+- Values can be strings, numbers, booleans or null.
+
+Question:
+{{ nl_question }}
+
+Do NOT include explanations, comments, or text outside the JSON.
+Do NOT wrap the JSON in markdown fences.

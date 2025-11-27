@@ -1,19 +1,37 @@
-# Minimal requirements for this repo
-# Generated from imports in: build_ground_truth.py, galois_eval.py, run_batch_export.py, and data/mma/*.py
-# Stdlib-only files need no extra packages.
+# Core data / database
 duckdb
 pandas
 numpy
-requests
-rapidfuzz
-python-Levenshtein
 orjson
 
-ibm-watsonx-ai
+# String matching / Utils
+rapidfuzz
+python-Levenshtein
+requests
 python-dotenv
 
+# IBM WatsonX official LangChain integration
+ibm-watsonx-ai
+# Google Gemini official wrapper
 google-generativeai
-
-azure-ai-inference
+# Azure OpenAI
 openai
-pydantic
+azure-ai-inference
+
+# LangChain + LLM adapters
+langchain
+langchain-core
+langchain-community
+langchain-openai
+langchain-google-genai
+langchain-ibm
+
+# Prompt templating
+jinja2==3.1.4
+
+# Validation
+pydantic==2.9.2
+pydantic_core==2.23.4
+
+# Testing
+pytest

@@ -1,241 +1,157 @@
-# 🧩 PathX — Graph Databases + LLM Baselines
+# PathX: DuckDB and LLM Baselines
 
-**University of Padua · Graph Databases 2025/26**  
+Baselines and utilities to reproduce the SIGMOD’25 GALOIS results: build DuckDB databases from CSVs, generate ground truth, run deterministic and LLM-backed SQL/NL baselines, export EXPLAIN/ANALYZE plans, and score submissions with the GALOIS metrics.
+
+Course: University of Padua — Graph Databases 2025/26  
 Team: Juliette Tonneau · Minseok Kim · Bita Khashechian · Danil Smirnov
 
-This repository reproduces the SQL↔LLM experiments from the SIGMOD’25 *GALOIS* paper.  
-The codebase lets ingest datasets into DuckDB, build ground-truth answers, run LLM-powered SQL/NL baselines (Azure OpenAI, Google Gemini, IBM watsonx), export EXPLAIN plans, and compare runs against the paper metrics.
-
----
-
-## Table of Contents
-1. [Project Overview](#project-overview)
-2. [Repository Layout](#repository-layout)
-3. [Prerequisites](#prerequisites)
-4. [Environment & Data Setup](#environment--data-setup)
-5. [Core Pipelines](#core-pipelines)
-6. [Baseline Orchestration & Evaluation](#baseline-orchestration--evaluation)
-7. [LLM Providers & Prompts](#llm-providers--prompts)
-8. [Utilities & Shortcuts](#utilities--shortcuts)
-9. [Development Notes](#development-notes)
-
----
-
-## Project Overview
-
-| Stage | Description | Key Outputs |
-|-------|-------------|-------------|
-| Ground Truth | Execute queries over CSVs with DuckDB to create reference answers. | `ground/<DATASET>/queryN.json` |
-| DuckDB Prep | Build per-dataset `.duckdb` files for reuse (queries, EXPLAIN). | `db/<DATASET>.duckdb` |
-| Deterministic SQL | Run queries directly on DuckDB to simulate execution. | `submissions/<DATASET>/queryN.json` |
-| NL & SQL LLM Baselines | Prompt LLMs to answer SQL (structured output) or NL-style questions. | `nl_baseline_results/`, `sql_baseline_results/` |
-| Evaluation | Compare any submission folder against ground truth with GALOIS metrics. | Comparison table |
-| Explain Export | Save EXPLAIN/ANALYZE text + JSON for each query. | `results/explain_*` |
-
----
-
-## Repository Layout
-
-```
-pathX/
-├── data/                     # datasets (CSV + queries_*.sql)
-├── db/                       # DuckDB files, created locally
-├── ground/                   # ground-truth query outputs
-├── results/                  # explain_json / explain_txt
-├── submissions/              # deterministic (DuckDB) query outputs
-├── sql_baseline_results/     # LLM SQL baseline outputs
-├── nl_baseline_results/      # LLM NL baseline outputs
-├── scripts/                  # automation helpers & evaluation tools
-├── src/
-│   ├── db_interaction/       # DuckDB ingest helpers
-│   ├── llm/                  # provider LLM models+ prompts
-│   ├── pipelines/            # CLI pipelines (queries, baselines, compare)
-│   ├── utils/                # logging, timers, JSON helper
-│   └── ...
-├── requirements.txt
-└── readme.md
-```
-
----
-
-## Prerequisites
-
-- **Python** ≥ 3.11 (virtual environment recommended).
-- **DuckDB** (Python package installs automatically).
-- `pip install -r requirements.txt`
-- Access credentials for at least one LLM provider (IBM watsonx, Google Gemini, or Azure OpenAI).
-- Datasets under `data/` matching the official PathX layout (CSV + `queries_*.sql`, optional `ingest_*.sql`).
-
----
-
-## Environment & Data Setup
-
-### 1. Create & activate a virtual environment
-
+## Quick start
+1) Python 3.11+, then:
 ```bash
-python -m venv .venv
-source .venv/bin/activate      # Linux/macOS
-# .venv\Scripts\activate       # Windows
+python -m venv .venv && source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
-
-### 2. Configure environment variables
-
-Create `.env` (or export vars) with the credentials you intend to use:
-
+2) Create `.env` with provider keys (see Config below).  
+3) Build ground truth:
+```bash
+python scripts/build_ground_truth.py --data-root data --ground-root ground --datasets flight-2 flight-4 fortune geo movies premier presidents world
 ```
-# IBM watsonx
+4) Ingest datasets and run deterministic SQL:
+```bash
+python -m src.db_interaction.ingest_all --datasets geo movies
+python -m src.db_interaction.run_queries --datasets geo movies
+```
+5) Run LLM baselines:
+```bash
+python -m src.baselines.sql_baseline --datasets geo movies --strategy direct --max-iters 5
+python -m src.baselines.nl_baseline  --datasets geo movies --strategy direct --max-iters 5
+```
+6) Evaluate:
+```bash
+python scripts/galois_eval.py --ground ground --submissions sql_baseline_results --datasets GEO MOVIES --overall --format table
+python scripts/galois_eval.py --ground ground --submissions nl_baseline_results  --datasets GEO MOVIES --overall --format table
+```
+
+## Repository map
+```
+data/                  CSVs + queries_*.sql (and optional queries_*.txt, ingest_*.sql)
+db/                    DuckDB files created locally (per dataset)
+ground/                Ground-truth JSON outputs (query{i}.json)
+results/               explain_json/ and explain_txt/ exports
+submissions/           Deterministic DuckDB query outputs
+sql_baseline_results/  Watsonx SQL baseline outputs (other providers create *_gemini, *_azure)
+nl_baseline_results/   Watsonx NL baseline outputs (other providers create *_gemini, *_azure)
+config/                AppConfig.yaml + config loader
+scripts/               Build ground truth, galois_eval, batch exporters, helpers
+src/
+  baselines/           LLM baselines (chains, prompts, parsing, output writers)
+  db_interaction/      DuckDB ingest/run/explain helpers
+  utils/               logging, dataset helpers, EXPLAIN export
+reports_pathx/         Coursework reports (not used by code)
+requirements.txt
+```
+
+## Config and credentials
+- Main settings live in `config/AppConfig.yaml`. Environment variables are interpolated (`${VAR}`) when the file is loaded.
+- Supported providers: `watsonx`, `gemini`, `azure` (set `llm_provider` in the YAML or override via env `LLM_PROVIDER`).
+- Prompt strategies (SQL and NL): `direct`, `zero_shot`, `few_shot`.
+- `.env` example:
+```
+# Watsonx
 WATSONX_API_KEY=...
 WATSONX_URL=https://us-south.ml.cloud.ibm.com
 WATSONX_PROJECT_ID=...
 WATSONX_MODEL_ID=ibm/granite-3-3-8b-instruct
+WATSONX_TEMPERATURE=0.0
+WATSONX_MAX_NEW_TOKENS=2048
 
-# Google Gemini
+# Gemini
 GEMINI_API_KEY=...
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL_NAME="gemini-2.5-flash"
 
 # Azure OpenAI
 AZURE_OPENAI_ENDPOINT=...
 AZURE_OPENAI_API_KEY=...
 AZURE_OPENAI_API_VERSION=2024-10-21
 AZURE_OPENAI_DEPLOYMENT=gpt-4o
-
-# Optional default provider override
-LLM_PROVIDER=watsonx
 ```
 
-The provider modules read from `.env` via `python-dotenv`. Keep real keys out of version control.
+## Data layout and conventions
+- Each dataset lives in `data/<dataset>/` and must include `queries_*.sql`. Optional: `ingest_*.sql` to predefine schema; otherwise CSVs are auto-read.
+- NL questions can be provided via `queries_*.txt` using `--query`-style sections (see `src/utils/dataset_io.py` for parsing).
+- `flight` is split under `data/flight/flight-2` and `data/flight/flight-4`; the tools expose them as `flight-2` and `flight-4`.
 
-### 3. Place datasets
+## Pipelines and commands
 
-```
-data/
-├── movies/
-│   ├── *.csv
-│   └── queries_*.sql
-├── flight/
-│   ├── flight-2/...
-│   └── flight-4/...
-└── ...
-```
-
-Optional `ingest_*.sql` files are executed before CSV fallbacks, so you can predefine custom schemas.
-
----
-
-## Core Pipelines
-
-### Build ground truth (JSON answers)
-
+### Ground truth (reference answers)
+Run SQL over CSVs and write `ground/<DATASET>/query{i}.json`:
 ```bash
-python -m scripts/build_ground_truth.py \
-  --data-root data \
-  --ground-root ground \
-  --datasets flight-2 flight-4 fortune geo movies premier presidents world
+python scripts/build_ground_truth.py --data-root data --ground-root ground --datasets geo movies
 ```
 
-This loads each dataset into an ad-hoc DuckDB instance and executes every query in `queries_*.sql`.  
-Outputs land in `ground/<DATASET>/queryN.json`.
-
-### Ingest datasets into DuckDB files
-
+### DuckDB ingestion
+Create `db/<DATASET>.duckdb` and load tables into schema `target` (runs `ingest*.sql` if present, else CSV autodetect):
 ```bash
-python -m src/db_interaction/ingest_all.py --datasets geo movies
+python -m src.db_interaction.ingest_all --datasets geo movies
 ```
 
-Creates `db/<DATASET>.duckdb` (one per dataset), running `ingest*.sql` when present or auto-creating tables from CSVs.  
-Used later by the deterministic SQL pipeline and EXPLAIN exporter.
-
-### Export EXPLAIN / ANALYZE plans
-
+### Deterministic SQL runner
+Execute `queries_*.sql` against DuckDB and store JSON rows under `submissions/<DATASET>/`:
 ```bash
-python -m src.pipelines.run_explain_all
+python -m src.db_interaction.run_queries --datasets geo movies
 ```
 
-For each dataset/query, saves text and JSON explain plans under `results/explain_txt` and `results/explain_json`.
-
----
-
-## Baseline Orchestration & Evaluation
-
-### 1. SQL baseline (LLM executes SQL and must return JSON rows)
-
-```
-python -m src.pipelines.sql_baseline \
-  --datasets movies geo \
-  --strategy direct \
-  --provider watsonx
+### EXPLAIN / ANALYZE export
+Generate text + JSON plans for every query; outputs under `results/explain_txt/` and `results/explain_json/`:
+```bash
+python -m src.db_interaction.run_explain_all
 ```
 
-- **Strategies**: `strict_json`, `constrained`, `hidden_cot`, `fewshot`, `compact`.  
-- Outputs stored in `sql_baseline_results/<DATASET>/queryN.json` with metadata (`time`, `tokens`, `result_set`).
-
-### 2. NL baseline (LLM answers natural-language prompt derived from SQL)
-
-```
-python -m src.pipelines.nl_baseline \
-  --datasets movies geo \
-  --provider gemini
+### LLM SQL baseline
+- Builds prompt via Jinja2 templates (`src/baselines/prompts/sql/*.j2`) and includes table/schema info from DuckDB.
+- Iterative retrieval with follow-up prompts (`max-iters` controls extra “more rows” turns).
+- Output path is provider-specific, e.g. `sql_baseline_results/WATSONX/GEO/query1.json`.
+```bash
+python -m src.baselines.sql_baseline --datasets geo movies --strategy few_shot --max-iters 5
 ```
 
-Uses the prompt template at `src/llm/prompts/nl_query.txt`. Results are written to `submissions/<DATASET>/queryN.json` (same schema as deterministic runs).
-
-### 3. Compare against paper metrics
-
-After both baselines produce outputs, evaluate them with the optimized GALOIS script:
-
-```
-python -m scripts/galois_eval.py \
-  --ground ground \
-  --submissions sql_baseline_results \
-  --datasets GEO MOVIES \
-  --cell-metric similarity \
-  --tuple-metric similarity \
-  --overall --format table
+### LLM NL baseline
+- Reads NL questions from `queries_*.txt` or line-by-line text files.
+- Uses the same schema-aware prompting and iterative runner as the SQL baseline.
+- Output path is provider-specific, e.g. `nl_baseline_results/WATSONX/GEO/query1.json`.
+```bash
+python -m src.baselines.nl_baseline --datasets geo movies --strategy direct --max-iters 5
 ```
 
-For a consolidated summary versus the paper numbers use:
-
-```
-python -m src.pipelines.compare_results
-```
-
-This runs the evaluator for NL + SQL folders and prints a side-by-side table (ours vs paper, absolute/relative deltas).
-
-### 4. All-in-one baseline runner
-
-```
-python -m scripts/run_baselines_and_compare.py
-```
-Runs baselines with default flags and compare results to paper
-
-```
-python -m scripts/run_baselines_and_compare.py \
-  --datasets geo movies \
-  --nl-provider watsonx \
-  --sql-provider gemini \
-  --sql-strategy strict_json
+### Evaluation (GALOIS metrics)
+Compare any submissions folder against ground truth (supports `--cell-metric exact|similarity`, `--tuple-metric exact|similarity`, `--format table|csv|json`):
+```bash
+python scripts/galois_eval.py --ground ground --submissions sql_baseline_results --datasets GEO MOVIES --overall --format table
 ```
 
-Flags allow skipping NL/SQL/compare steps or running compare-only.
+### Paper comparison helper
+Runs the evaluator for both baselines and prints deltas vs published numbers:
+```bash
+python -m src.baselines.compare_results
+```
 
-## LLM Providers & Prompts
+### Batch exporter for py-galois (optional)
+Calls a running py-galois server and saves outputs under `submissions/<STUDENT>/<DATASET>/`:
+```bash
+python scripts/run_batch_export.py --data-root data --schemas-root schemas --submissions-root submissions --student myname --datasets geo --api-url http://127.0.0.1:8000/query
+```
 
-`src/llm/` contains one client per provider:
+## Output folders at a glance
+- `db/<DATASET>.duckdb`        DuckDB snapshot per dataset (schema `target`)
+- `ground/<DATASET>/query*.json`   Reference answers
+- `submissions/<DATASET>/query*.json`   Deterministic DuckDB runs
+- `sql_baseline_results/*/<DATASET>/query*.json`   LLM SQL baseline (provider-specific root)
+- `nl_baseline_results/*/<DATASET>/query*.json`    LLM NL baseline (provider-specific root)
+- `results/explain_{txt,json}/<DATASET>/`          EXPLAIN and EXPLAIN ANALYZE dumps
 
-| Provider | Module | Notes |
-|----------|--------|-------|
-| IBM watsonx | `watsonx_client.py` | Uses `ibm_watsonx_ai.ModelInference`. Returns `(text, total_tokens)` |
-| Google Gemini | `gemini_client.py` | Wraps `google.generativeai` and extracts text/usage. |
-| Azure OpenAI | `azure_client.py` | Chat completions API; handles streaming content parts. |
-
-Set `LLM_PROVIDER` env var (or CLI `--provider`) to choose the backend at runtime.  
-Prompt engineering lives alongside the pipelines:
-
-- SQL baseline: prompts embedded in `src/pipelines/sql_baseline.py` (strategy-dependent).  
-- NL baseline: edit `src/llm/prompts/nl_query.txt` to tweak instructions globally.
-
-Every provider callable must expose `generate_text(prompt) -> tuple[str, int | None]`, making it easy to add new backends.
-
-
+## Notes
+- Make sure DuckDB files are built (ingest step) before running LLM baselines so schema introspection succeeds.
+- `config/AppConfig.yaml` pulls values from `.env`; missing keys will raise at startup.
+- JSON outputs include `result_set`, elapsed `time`, total `tokens`, and `meta.iterations_used` for iterative runs.
+- Keep provider secrets out of version control; `.env` is gitignored by default.
