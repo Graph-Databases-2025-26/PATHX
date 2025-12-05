@@ -17,40 +17,53 @@ class PromptTemplates:
     ) -> str:
         """Initial Table-Scan prompt"""
         attrs_text = ", ".join(attributes)
-        cond_text = (
-            f"Only return rows that satisfy ALL of the following condition(s): {where_clause}"
-            if where_clause
-            else "Return any rows that are correct and consistent with the table."
-        )
-        
+        if where_clause:
+            cond_text = (
+                "Prefer rows that satisfy ALL of the following condition(s): "
+                f"{where_clause}. "
+                "If you are not completely sure, you can still return plausible rows that approximately match."
+            )
+        else:
+            cond_text = "Return any rows that are correct and consistent with the table."
+
         return f"""You are an expert data assistant.
 
 We have a table "{table}" in dataset "{dataset}".
 We are interested in the following attributes (columns): {attrs_text}.
 
 Task:
-- Produce rows from this table.
+- Produce multiple rows from this table.
 - {cond_text}
 
 Output requirements:
 - Return ONLY valid JSON with NO explanations, NO markdown, NO extra text
 - Use this exact format: {{"result_set": [{{"attr1": "val1", "attr2": "val2"}}, ...]}}
 - Do NOT add comments, examples, or any text before/after the JSON
-- If no rows match, return: {{"result_set": []}}
+- If you believe no rows match at all, return: {{"result_set": []}}
 
 Start your response with {{ and end with }}"""
 
-    @staticmethod
-    def table_scan_followup() -> str:
-        """Follow-up Table-Scan prompt for more rows"""
-        return """List more values if there are more, otherwise return an empty result set.
 
-Do NOT repeat any row that was already provided.
+    @staticmethod
+    def table_scan_followup(previous_rows: List[dict]) -> str:
+        """Follow-up Table-Scan prompt for more rows, with explicit context."""
+        # Possible to limit to last N rows for security/performance
+        preview_rows = previous_rows[-50:]
+        rows_json = json.dumps(preview_rows, ensure_ascii=False, indent=2)
+
+        return f"""You are an expert data assistant.
+
+You previously provided the following rows (do NOT repeat them):
+
+{rows_json}
+
+Now list MORE rows from the same table that satisfy the same conditions.
+If there are no more rows, return an empty result set.
 
 CRITICAL: Return ONLY valid JSON with NO explanations.
-Format: {"result_set": [...]} or {"result_set": []}
+Format: {{"result_set": [{{"attr1": "val1", "attr2": "val2"}}, ...]}} or {{"result_set": []}}
 
-Start your response with { and end with }"""
+Start your response with {{ and end with }}"""
 
     @staticmethod
     def key_scan_first(
@@ -66,6 +79,9 @@ Start your response with { and end with }"""
             if where_clause
             else ""
         )
+
+        # Используем реальное имя ключевого атрибута в примере
+        example_key = key_attributes[0] if key_attributes else "key"
         
         return f"""You are an expert data assistant.
 
@@ -74,19 +90,31 @@ Key attributes: {keys_text}
 {cond_text if cond_text else "List all unique keys."}
 
 CRITICAL: Return ONLY valid JSON with NO explanations, NO markdown.
-Format: {{"result_set": [{{"key": "value1"}}, {{"key": "value2"}}, ...]}}
+Format: {{"result_set": [{{"{example_key}": "value1"}}, {{"{example_key}": "value2"}}, ...]}}
 
 Start your response with {{ and end with }}"""
 
+
     @staticmethod
-    def key_scan_followup() -> str:
-        """Follow-up Key-Scan prompt for more keys"""
-        return """List MORE unique key values if there are more.
+    def key_scan_followup(previous_keys: List[dict]) -> str:
+        """Follow-up Key-Scan prompt for more keys, with explicit context."""
+        preview_keys = previous_keys[-100:]
+        keys_json = json.dumps(preview_keys, ensure_ascii=False, indent=2)
 
-Do NOT repeat previous values. Return empty result_set if no more keys exist.
+        return f"""You are an expert data assistant.
 
-Return ONLY valid JSON:
-{"result_set": []}"""
+You previously listed the following key values (do NOT repeat them):
+
+{keys_json}
+
+List MORE unique key values for the same table, if there are any.
+If there are no more keys, return an empty result set.
+
+Return ONLY valid JSON with NO explanations or markdown.
+Format: {{"result_set": [{{"key_attr": "value"}}, ...]}} or {{"result_set": []}}
+
+Start your response with {{ and end with }}"""
+
 
     @staticmethod
     def key_scan_tuple(
@@ -121,18 +149,43 @@ Start your response with {{ and end with }}"""
         key_value: Any,
     ) -> str:
         """Prompt to get a single cell value (Galois_WO)"""
-        return f"""For table "{table}" in dataset "{dataset}",
-what is the value of attribute "{attribute}" for the row with {key_name} = "{key_value}"?
+        return f"""You are an expert data assistant with strong knowledge of real-world data.
 
-CRITICAL: Return ONLY valid JSON with NO explanations, NO markdown blocks, NO extra text.
-Format: {{"{attribute}": value}}
+We have a table "{table}" in dataset "{dataset}".
+You are given the key of a specific row: {key_name} = "{key_value}".
 
-Example correct responses:
-{{"{attribute}": 12345}}
-{{"{attribute}": "text value"}}
-{{"{attribute}": null}}
+Your task:
+- Return the value of attribute "{attribute}" for THIS row.
+- Use your best estimate based on real-world information.
+- Prefer an approximate but reasonable value over null.
+
+CRITICAL OUTPUT RULES:
+- Return ONLY valid JSON with NO explanations, NO markdown blocks, NO extra text.
+- If the attribute is NUMERIC (like population, area, counts, GDP, etc.):
+  - Return a bare number (integer) WITHOUT quotes, units, or words.
+  - Example: {{"{attribute}": 3769000}}
+- If the attribute is TEXT (like country name, capital city, category):
+  - Return a quoted string.
+  - Example: {{"{attribute}": "Germany"}}
+- Only return null if the value is genuinely not applicable (very rare).
+
+Valid examples:
+{{"{attribute}": 3769000}}
+{{"{attribute}": 1710000}}
+{{"{attribute}": 25}}
+{{"{attribute}": "Germany"}}
+
+INVALID examples (do NOT do this):
+{{"{attribute}": "about 3.7 million"}}
+{{"{attribute}": "3.7M people"}}
+{{"{attribute}": "663,267 square kilometers"}}
+{{"{attribute}": null}}  # avoid null unless truly impossible to estimate
+
+Format to follow:
+{{"{attribute}": <value>}}
 
 Do NOT include any text before or after the JSON object."""
+
 
     @staticmethod
     def evaluate_selectivity(
