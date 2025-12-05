@@ -63,6 +63,11 @@ class EvaluationConfig(BaseModel):
     metrics: list[str]
     output_format: str
     aggregate: bool
+    
+class GaloisConfig(BaseModel):
+    max_iterations: int = 5
+    confidence_threshold: float = 0.6
+
 
 
 class AppConfig(BaseModel):
@@ -78,6 +83,8 @@ class AppConfig(BaseModel):
     iterative: IterativeConfig
     logging: LoggingConfig
     evaluation: EvaluationConfig
+
+    galois: GaloisConfig 
 
     @classmethod
     def load(cls, path: str = "src/config/AppConfig.yaml") -> "AppConfig":
