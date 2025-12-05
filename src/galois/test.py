@@ -1,40 +1,55 @@
-# Test query with full result display
+"""
+Extended GALOIS test.
+
+Runs two queries to exercise different branches:
+
+1) WORLD.EU_Cities 
+2) GEO.states  
+
+For each query we run all four variants:
+Galois_WO, Galois_A, Galois_S, Galois_F
+and print comparison tables in the same style.
+"""
+
 from src.galois.run_galois import GaloisRunner
 
-print("""
-╔═══════════════════════════════════════════════════════════╗
-║         GALOIS Test Query                                 ║
-╚═══════════════════════════════════════════════════════════╝
-""")
 
-runner = GaloisRunner()
+def run_eu_cities(runner: GaloisRunner) -> None:
+    print("\n" + "=" * 70)
+    print("EU_CITIES QUERY (multi-condition WHERE)")
+    print("=" * 70)
 
-# Query: European countries with > 60M population AND > 3T GDP
-results = runner.run_query(
-    dataset="WORLD",
-    table="EU_Cities",
-    attributes=["name", "country", "population", " # pvt hosps"],
-    where_clause="population > 1M AND  # pvt hosp > 15",
-    
-    # Pour debug plus rapide, décommenter pour tester seulement A et F:
-    variants_to_run=["Galois_A","Galois_S", "Galois_F"]
-)
+    results = runner.run_query(
+        dataset="WORLD",
+        table="EU_Cities",
+        attributes=["name", "country", "population", "num_private_hospitals"],
+        where_clause="population > 1M AND num_private_hospitals > 15",
+        variants_to_run=["Galois_WO", "Galois_A", "Galois_S", "Galois_F"],
+    )
 
-print("\n" + "="*70)
-print("DISPLAYING RESULTS")
-print("="*70)
+    runner.compare_results(results)
+    runner.save_results(results, "src/galois/galois_results_eu_cities.json")
 
-# Afficher les résultats avec tables
-runner.compare_results(results)
 
-# Sauvegarder pour analyse ultérieure
-runner.save_results(results, "src/galois/galois_results.json")
+def run_geo_states(runner: GaloisRunner) -> None:
+    print("\n" + "=" * 70)
+    print("GEO.STATES QUERY (single-condition WHERE)")
+    print("=" * 70)
 
-print("\n" + "="*70)
-print("TIPS:")
-print("="*70)
-print("1. Les tables sont affichées dans la section 'RESULT SET CONTENT'")
-print("2. Pour affichage plus joli: python -m src.galois.print_results galois_results.json")
-print("3. Pour debug prompts: python -m src.galois.debug_prompts")
-print("4. Voir TROUBLESHOOTING.md si problèmes")
-print("="*70 + "\n")
+    results = runner.run_query(
+        dataset="GEO",
+        table="states",
+        attributes=["name", "area", "population", "capital"],
+        where_clause="area > 300000",
+        variants_to_run=["Galois_WO", "Galois_A", "Galois_S", "Galois_F"],
+    )
+
+    runner.compare_results(results)
+    runner.save_results(results, "src/galois/galois_results_geo_states.json")
+
+
+if __name__ == "__main__":
+    runner = GaloisRunner()
+
+    run_eu_cities(runner)
+    # run_geo_states(runner)
