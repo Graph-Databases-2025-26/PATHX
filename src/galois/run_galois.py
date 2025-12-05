@@ -118,16 +118,16 @@ class GaloisRunner:
         """
         Print comparison table of results.
 
-        results       – стандартные Galois-варианты
-        extra_results – дополнительные варианты (например, Naive_LLM),
-                        которые тоже попадут в summary и RESULT SET CONTENT.
+        results       - standard Galois variants
+        extra_results - additional variants (e.g., Naive_LLM) that are also
+                        included in the summary and RESULT SET CONTENT.
         """
-        # объединяем, но сохраняем порядок: сначала Galois, потом extra
+        # merge while preserving order: Galois first, then extras
         all_results: Dict[str, Any] = dict(results)
         if extra_results:
             for name, res in extra_results.items():
                 if name in all_results:
-                    # на всякий случай, чтобы не перезаписать
+                    # avoid accidental overwrite
                     name = f"{name}_extra"
                 all_results[name] = res
 
@@ -202,7 +202,7 @@ class GaloisRunner:
                 )
             )
 
-        # -------- TOKEN COST (только по отношению к Galois_WO) --------
+        # -------- TOKEN COST (relative to Galois_WO) --------
         baseline_name = "Galois_WO"
         if baseline_name in all_results and "error" not in all_results[baseline_name]:
             baseline_tokens = all_results[baseline_name].get("tokens", 0) or 0
@@ -261,7 +261,7 @@ def run_eu_cities(runner: GaloisRunner) -> None:
     )
 
     runner.compare_results(results)
-    runner.save_results(results, "src/test_results/galois_results_eu_cities.json")
+    runner.save_results(results, "test_results/galois_results_eu_cities.json")
 
 
 def run_geo_states(runner: GaloisRunner) -> None:
