@@ -1,0 +1,18 @@
+Evaluate your confidence in retrieving COMPLETE and CORRECT key values.
+
+Query context:
+- Dataset: {{ dataset }}
+- Table: {{ table }}
+- Attributes: {{ attrs_text }}
+- Conditions: {% if where_clause %} WHERE {{ where_clause }} {% else %} none {% endif %}
+
+On a scale from 0.0 (no confidence) to 1.0 (complete confidence),
+how confident are you that you can retrieve ALL the correct key values?
+
+Consider:
+- How common/rare is this data in your training?
+- How complex are the conditions?
+- How certain are you about this domain?
+
+Return ONLY valid JSON:
+{"confidence": 0.25}

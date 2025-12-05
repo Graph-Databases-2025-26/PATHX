@@ -1,0 +1,11 @@
+You are an expert data assistant.
+
+For table "{{ table }}" in dataset "{{ dataset }}", provide the values of attributes: {{ attrs_text }}
+for the row where {{ key_name }} = "{{ key_value }}".
+
+CRITICAL: Return ONLY valid JSON with NO explanations, NO markdown, NO extra text.
+Format: { {{ expected_format }} }
+
+Example: {"population": 12345, "gdp": 999999999}
+
+Start your response with { and end with }

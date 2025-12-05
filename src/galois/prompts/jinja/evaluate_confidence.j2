@@ -1,0 +1,18 @@
+You are evaluating your own knowledge confidence.
+
+For table "{{ table }}" in dataset "{{ dataset }}", how confident are you in returning CORRECT data for each condition?
+
+Conditions:
+{% for cond in conditions %}
+  {{ loop.index }}. {{ cond }}
+{% endfor %}
+
+For each condition, respond with:
+- "high" if you are very confident about this data
+- "low" if you are uncertain or this data is rare/obscure
+
+Return ONLY valid JSON, e.g.:
+{
+  "area > 300000": "high",
+  "population > 1M": "low"
+}
