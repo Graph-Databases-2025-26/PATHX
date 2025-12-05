@@ -7,6 +7,7 @@ import json
 from typing import Any, Dict, Optional
 from tabulate import tabulate
 import pandas as pd
+from pathlib import Path
 
 from src.baselines.llm_factory import get_llm_wrapper
 from src.galois.variants.galois_wo import GaloisWOOperator
@@ -223,6 +224,53 @@ class GaloisRunner:
 
     def save_results(self, results: Dict[str, Any], filepath: str) -> None:
         """Save results to JSON file"""
-        with open(filepath, 'w') as f:
+        path = Path(filepath)                     
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        with path.open('w') as f:
             json.dump(results, f, indent=2, default=str)
-        print(f"\nResults saved to: {filepath}")
+
+        print(f"\nResults saved to: {path}")
+
+def run_eu_cities(runner: GaloisRunner) -> None:
+    print("\n" + "=" * 70)
+    print("EU_CITIES QUERY (multi-condition WHERE)")
+    print("=" * 70)
+
+    results = runner.run_query(
+        dataset="WORLD",
+        table="EU_Cities",
+        attributes=["name", "country", "population", "num_private_hospitals"],
+        where_clause="population > 1M AND num_private_hospitals > 15",
+    )
+
+    runner.compare_results(results)
+    runner.save_results(results, "src/test_results/galois_results_eu_cities.json")
+
+
+def run_geo_states(runner: GaloisRunner) -> None:
+    print("\n" + "=" * 70)
+    print("GEO.STATES QUERY (single-condition WHERE)")
+    print("=" * 70)
+
+    results = runner.run_query(
+        dataset="GEO",
+        table="states",
+        attributes=["name", "area", "population", "capital"],
+        where_clause="area > 300000",
+    )
+
+    runner.compare_results(results)
+    runner.save_results(results, "src/test_results/galois_results_geo_states.json")
+
+
+def main() -> None:
+
+    runner = GaloisRunner()
+
+    run_eu_cities(runner)
+    # run_geo_states(runner)
+
+
+if __name__ == "__main__":
+    main()
