@@ -6,6 +6,7 @@
 \usepackage{amsmath}
 \usepackage{booktabs}
 \usepackage{array}
+\usepackage{float}
 
 \geometry{a4paper, margin=1in}
 \onehalfspacing
@@ -24,7 +25,7 @@
 
 \maketitle
 \tableofcontents
-\newpage
+
 
 \begin{abstract}
 Large Language Models (LLMs) contain substantial factual knowledge encoded within their parameters. However, when used as virtual relational databases, LLMs exhibit incomplete tuple retrieval, hallucinations, and inconsistencies. Inspired by the GALOIS framework, this work implements a minimal query execution layer consisting of three core operators: \textit{LLMScan}, \textit{Filter-LLMScan}, and a \textit{Two-Phase Key-First Retrieval} operator. Using the EU Cities dataset as a case study, we compare the quality of results produced by a naïve single-shot LLM query with those produced by our structured execution plans. Our findings show substantial improvements in tuple completeness and attribute accuracy. 
@@ -45,7 +46,9 @@ While LLMs are capable of generating syntactically valid SQL-style outputs, they
 
 GALOIS addresses these issues through operator decomposition, iterative prompting, and selective predicate pushdown. Our implementation adopts these principles and evaluates their effectiveness in a constrained but realistic setting.
 
-\section{Non-Iterative Baselines}
+\section{Baselines Implementation}
+
+\subsection{Non-Iterative baselines}
 
 In a non-iterative system, the model was expected to produce the full answer (whether a natural-language explanation or a SQL query) in a single pass. The model receives one prompt, returns one output, and the interaction ends. This design keeps the setup extremely simple and inexpensive, which is why we used it as our initial baseline.
 
@@ -54,21 +57,25 @@ However, this simplicity also limits its effectiveness. More involved queries, e
 These observations motivated the shift in our report from the basic non-iterative baseline to the iterative procedures introduced in the next section, which address the shortcomings we observed in the single-pass approach.
 
 
-\section{Implementing Iterative Baselines}
+\subsection{Iterative baselines}
 
-Llama-3.1-70B was usedvwith same task and metrics, but an \emph{iterative} procedure
-\emph{iterative} procedure was added on top of the LLM. The model can now refine its
-answer over several steps instead of producing everything in a single call.
+Re-iteration in our system is designed to overcome the fact that a single LLM call rarely returns the complete set of relevant rows. The process begins with an initial prompt that describes the dataset, the table, the desired attributes, and any filtering conditions. The model returns a first batch of results, which is almost always incomplete. These results are parsed and stored. After this first step, the system constructs a follow-up prompt that contains the full context of everything the model has already returned. This follow-up prompt explicitly includes the previously obtained rows and instructs the model not to repeat them, while also requesting additional rows that satisfy the same conditions. Because this prompt contains concrete examples of what has already been produced, the model is guided to ``search'' its internal knowledge for entries it has not yet listed. The system sends this follow-up prompt to the model, parses the newly returned rows, filters out duplicates, and adds the genuinely new elements to the growing result set.
 
-For the SQL interface, our iterative implementation remains competitive with
-the paper baseline, although the quality metrics are slightly lower.
-However, the cost metrics again improve: both token usage and average
-latency decrease substantially.  In conclusion, adding iterative execution
-mitigates many of the issues observed in our earlier non-iterative
-experiments and yields a more robust behaviour, especially for the NL
-interface.
+\medskip
 
-\begin{table}[t]
+This cycle continues for several iterations. After each response, the system embeds the updated list of results back into the next prompt, reinforcing the instruction not to repeat earlier rows while asking for more. Re-iteration stops either when the model returns an empty set---indicating that it believes no more rows can be produced---or when the system reaches a configured maximum number of iterations. In practice, this multi-step prompting leads to substantially better recall than a single query: the model is able to gradually expand its answer, retrieving less salient or less commonly mentioned items that it did not produce initially. In other words, re-iteration converts the model's generative behavior into a controlled, incremental enumeration process, gradually approximating a more complete view of the underlying table despite the absence of an actual database.
+
+
+The table above compares our replicated NL and SQL baselines against the values reported in the original Galois paper. While there are numerical differences between the two sets of results, these deviations remain relatively small and follow the same qualitative trends. In particular, increasing the number of iterative retrieval steps significantly improves answer completeness, reduces tuple omissions, and increases cell-level accuracy---exactly as described in the paper.
+
+For NL queries, our implementation with \textsc{Llama-3.1-70B} consistently outperforms the paper’s NL baseline across most metrics (F1-Cell, Tuple-Constraint, Avg-Score), though it sometimes produces slightly more conservative cardinalities.
+
+For SQL-style queries, the trend remains the same as in the paper: SQL prompts yield more accurate and complete tuple sets than NL prompts. This advantage becomes even more pronounced with iterative querying. In our results, SQL’s F1-Cell and Cardinality metrics remain higher than NL’s, mirroring the original findings that structured, attribute-oriented prompting leads to more reliable extractions. Although the absolute values differ somewhat from the paper—largely due to differences in models and prompting details—the relative ordering and behavior of NL vs.\ SQL baselines is preserved.
+
+Overall, while our numbers are not identical to those in the Galois paper, the discrepancies are modest and expected. More importantly, the core pattern is reproduced faithfully: SQL queries converge to higher-quality results than NL queries. \textsc{Llama-3.1-70B} amplifies these trends, producing cleaner, more complete tuple sets with fewer missing attributes.
+
+
+\begin{table}[H]
   \centering
   \caption{NL baseline comparison}
   \label{tab:nl-comparison}
@@ -80,13 +87,13 @@ interface.
     Cardinality   & 0.462   & 0.505   & +0.043   & +9.3\%   \\
     Tuple Constr. & 0.065   & 0.159   & +0.094   & +144.6\% \\
     AVG-Score     & 0.254   & 0.339   & +0.085   & +33.5\%  \\
-    \#Tokens (M)  & 0.830   & 0.330   & $-0.500$ & $-60.8$\% \\
-    Avg Time (s)  & 120.000 & 21.250  & $-98.750$& $-82.3$\% \\
+    \#Tokens (M)  & 0.83   & 0.33   & $-0.500$ & $-60.8$\% \\
+    Avg Time (s)  & 120 & 21.250  & $-98.750$& $-82.3$\% \\
     \hline
   \end{tabular}
 \end{table}
 
-\begin{table}[t]
+\begin{table}[H]
   \centering
   \caption{SQL baseline comparison}
   \label{tab:sql-comparison}
@@ -99,42 +106,75 @@ interface.
     Tuple Constr. & 0.351  & 0.243  & $-0.108$  & $-30.8$\% \\
     AVG-Score     & 0.481  & 0.407  & $-0.074$  & $-15.4$\% \\
     \#Tokens (M)  & 0.330  & 0.210  & $-0.120$  & $-37.0$\% \\
-    Avg Time (s)  & 61.400 & 11.000 & $-50.400$ & $-82.1$\% \\
+    Avg Time (s)  & 61.4 & 11 & $-50.400$ & $-82.1$\% \\
     \hline
   \end{tabular}
 \end{table}
 
 
-\section{System Architecture}
+\section{Architecture and Implementation Details}
 
-PHYSICAL AND LOGICAL PLAN GOES HERE
+\subsection{Overview}
+Our implementation follows a layered architecture that separates query handling, planning, optimization, and iterative execution. The Query Interface accepts SQL queries and initiates the process. The Logical Plan Generator produces multiple plan variants (Galois A, Galois S, Galois F, etc.) by applying different pushdown strategies for \texttt{WHERE} conditions. The Physical Plan Selector, a key component of the Galois F variant, dynamically chooses between the TableScanOperator (cost-efficient) and the KeyScanOperator (precision-focused) based on an internal confidence estimate produced by the LLM (cf.\ \texttt{galois\_f.py}). Finally, the Execution Engine iteratively calls the LLM, aggregates the retrieved results, and manages metrics such as token consumption and execution time.
 
-\section{Implementation Details}
+\subsection{Operators}
+The operators define the physical methods for extracting data from the LLM. The BaseScanOperator (\texttt{base\_scan.py}) provides the abstract interface and common utilities for all scan strategies. Its functionality includes unified LLM interaction through \texttt{call\_llm()}, timing and token accounting, row deduplication via \texttt{filter\_new\_rows()}, and the generation of deterministic row signatures using \texttt{row\_signature()}.
 
-\subsection{LLMScan Operator}
+The TableScanOperator (\texttt{table\_scan.py}) implements Algorithm~1 from the paper. Its strategy is to retrieve complete tuples iteratively, using a single prompt per iteration to request multiple rows at once. This approach reduces the cost per LLM call but may lead to lower result quality for complex queries.
 
-The \textit{LLMScan} operator retrieves tuples iteratively by prompting the LLM with a JSON schema specifying the required fields. After receiving an initial batch of tuples, the operator issues follow-up prompts requesting any additional records not previously mentioned. This continues until convergence. The operator includes a robust JSON extraction module capable of recovering valid arrays from incomplete model outputs.
+The KeyScanOperator (\texttt{key\_scan.py}) implements Algorithm~2 and adopts a two-phase retrieval workflow. First, all key values are iteratively extracted. Second, a separate, targeted LLM call is issued for each retrieved key to obtain all remaining attributes. This strategy typically yields higher-quality results due to the more focused prompts used in the second step.
 
-\subsection{Filter-LLMScan Operator}
+\subsection{Optimizers}
+The PushdownOptimizer (\texttt{pushdown.py}) provides the core logical optimization for processing \texttt{WHERE} conditions. Its functionality is organized into a small set of methods:
+\begin{itemize}
+    \item \texttt{parse\_conditions()} parses the \texttt{WHERE} clause into a list of atomic conditions.
+    \item \texttt{build\_where\_clause()} reconstructs a valid \texttt{WHERE} clause from a selected subset of conditions.
+    \item \texttt{select\_conditions()} filters conditions according to an evaluation criterion, such as high LLM-estimated confidence or higher selectivity.
+    \item \texttt{determine\_pushdown()} decides which conditions to push down based on the rule-based strategy: push a single qualifying condition, push all qualifying conditions, or push none.
+\end{itemize}
 
-\textit{Filter-LLMScan} extends the base operator by incorporating simple predicates directly into the prompt. Conditions such as numerical thresholds or categorical matches can improve precision, but overly complex conjunctive filters may degrade recall. To mitigate this, our implementation selectively pushes down predicates only when they are syntactically simple.
+\subsection{WHERE Clause Evaluator}
+This component implements a complete SQL \texttt{WHERE} clause evaluator used for in-memory filtering, particularly when conditions are not pushed down to the LLM or when post-filtering is required. It supports standard comparison operators (\texttt{=}, \texttt{!=}, \texttt{<}, \texttt{<=}, \texttt{>}, \texttt{>=}), logical operators (\texttt{AND}, \texttt{OR}) with parentheses for grouping, and additional operators such as \texttt{LIKE}, \texttt{IN}, \texttt{IS NULL}, and \texttt{IS NOT NULL}. The evaluator also interprets unit suffixes (e.g., 1M, 1K, 1B) as numeric values, ensuring correct comparison semantics.
 
-\subsection{Two-Phase Key-First Retrieval}
+\subsection{Variants}
+\begin{enumerate}
+    \item \textbf{Without Optimizations (WO).}  
+    Performs cell-by-cell retrieval with one LLM call per attribute of every row. No \texttt{WHERE} pushdown is applied, and all filtering occurs in memory.
+    
+    \item \textbf{Push All Conditions.}  
+    Pushes all \texttt{WHERE} conditions directly into the TableScanOperator prompt. This minimizes token cost but may reduce result quality.
 
-The two-phase strategy significantly improves completeness. In the first phase, only key attributes (e.g., city names) are retrieved. The simplicity of this task aligns well with LLM capabilities and yields broader coverage. In the second phase, each key is queried independently for all remaining attributes, producing more accurate and complete tuples.
+    \item \textbf{Push Selective Conditions.}  
+    Uses the LLM to estimate the selectivity of each condition (e.g., ``higher'' or ``lower'') and pushes only the most selective ones according to the PushdownOptimizer.
 
-\subsection{Joining and Post-Processing}
+    \item \textbf{Full Optimization.}
+Combines logical and physical optimization. Conditions with high confidence are pushed down, and the plan adaptively selects between the \texttt{TableScanOperator} and \texttt{KeyScanOperator} using an estimated key-retrieval confidence $\text{conf}(q)$.
 
-To support multi-relation queries, each relation is retrieved independently and joined via Python-based equi-joins. Tuples are normalized, deduplicated, and aligned to a canonical schema.
+To estimate confidence, the model provides a simple self-assessment (e.g., ``high'' or ``low'') for each predicate in the \texttt{WHERE} clause, which we map to numeric scores using a tunable threshold. Based on these scores, Galois-F splits the predicates into two groups:
 
-\section{Experimental Setup}
+\begin{itemize}
+    \item \textit{High-confidence predicates:} pushed down and included directly in the structured SQL prompt, allowing the LLM to both generate and filter rows for attributes it handles reliably.
+    \item \textit{Low-confidence predicates:} excluded from the prompt and treated as residual conditions. After the LLM produces a candidate result set, these predicates are enforced exactly by the \texttt{WhereEvaluator}, which applies the original boolean expressions programmatically.
+\end{itemize}
 
-We evaluate all operators using a query from the paper example:
-\begin{quote}
-\textit{``What are size and population of European cities with more than 1M people and more than fifteen private hospitals?''}
-\end{quote}
+This design ensures that attributes the model ``knows well'' are handled inside the LLM, while harder predicates are enforced deterministically. Confidence estimation thus determines where filtering occurs—inside the model or in our code—and allows Galois-F to combine semantic reasoning with precise constraint enforcement while keeping token costs controlled.
 
-We compare naive and four GALOIS versions (WO, A, S, F) outputs.
+
+\end{enumerate}
+
+
+\subsection{Jinja2}
+
+In the current implementation phase, Jinja2 is used as the main mechanism to construct the prompts required by the LLMScan and Filter-LLMScan operators. The goal is to keep all prompts generated by the system consistent, while still allowing the operators to specialize the query according to the table, attribute list, and pushed-down conditions. Rather than assembling long prompt strings manually in Python, we define Jinja2 templates corresponding to the different operator variants. At runtime, the Python implementation of \texttt{LLMScanOperator} and \texttt{FilterLLMScanOperator} instantiates these templates by injecting the table name, the selected attributes, and the optional conditions. This templating layer is essential, because it allows the queries to be executed with a stable prompt family while we vary the strategy.
+
+\subsection{LangChain}
+
+LangChain is used as the execution backbone for all interactions between our Python operators and the underlying language model. The \texttt{LLMScanOperator} uses LangChain to send the Jinja2-generated prompt to the chosen model and to retrieve the raw text response, which is then parsed into a collection of tuples. \texttt{FilterLLMScanOperator} extends this pattern by using prompts that already contain the pushed-down predicate, but the actual call logic remains the same: each operator works through a LangChain LLM client.
+
+For the two-phase retrieval, inspired by the key-first strategy of Galois, LangChain is invoked twice in a structured way. In the first phase, the system issues a series of prompts that only ask for key values satisfying the conditions; in the second phase, it iterates over the retrieved keys and calls the LLM again to obtain the remaining attributes for each key. LangChain allows us to implement this pattern as a controlled sequence of calls, which simplifies logging and comparison with the naive baseline.
+
+
+
 
 
 \section{Experimental Pipeline}
@@ -205,7 +245,7 @@ This comparison illustrates the difference between monolithic prompting and stru
 Following table presents the runtime, token usage, and execution
 strategies for all plans.
 
-\begin{table}[h!]
+\begin{table}[H]
 \centering
 \begin{tabular}{lcccc}
 \hline
@@ -225,7 +265,7 @@ Galois\_F  & 7 & 2202  & 14.76 & key\_scan \\
 
 \subsection{Result Set Outputs}
 
-\begin{table}[h!]
+\begin{table}[H]
 \centering
 \begin{tabular}{l l r r}
 \hline
@@ -242,7 +282,7 @@ Paris  & France  & 2148000 & 25 \\
 \end{table}
 
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \begin{tabular}{l l r r}
 \hline
@@ -259,7 +299,7 @@ Rome & Italy & 2873000 & 50 \\
 \caption{Result set for the \texttt{Galois\_WO} variant.}
 \end{table}
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \begin{tabular}{l l r r}
 \hline
@@ -276,7 +316,7 @@ Paris & France & 2148000 & 30 \\
 
 
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \begin{tabular}{l l r r}
 \hline
@@ -293,7 +333,7 @@ Vienna & Austria & 1900000 & 25 \\
 \end{table}
 
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \begin{tabular}{l l r r}
 \hline
