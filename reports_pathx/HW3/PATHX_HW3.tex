@@ -11,14 +11,14 @@
 \geometry{a4paper, margin=1in}
 \onehalfspacing
 
-\title{PATHX \\ \large GALOIS-Inspired LLM Query Processing: A Demo Example}
+\title{PATHX \\ \large Implementation of GALOIS Features - first check}
 \author{
+    Minseok Kim \\
+    Juliette Tonneau\\
     Danil Smirnov \\
     Bita Khashechian \\
-    Minseok Kim \\
-    Juliette Tonneau
 }
-\date{5 Decamber 2025}
+\date{5 December, 2025}
 
 
 \begin{document}
@@ -28,23 +28,16 @@
 
 
 \begin{abstract}
-Large Language Models (LLMs) contain substantial factual knowledge encoded within their parameters. However, when used as virtual relational databases, LLMs exhibit incomplete tuple retrieval, hallucinations, and inconsistencies. Inspired by the GALOIS framework, this work implements a minimal query execution layer consisting of three core operators: \textit{LLMScan}, \textit{Filter-LLMScan}, and a \textit{Two-Phase Key-First Retrieval} operator. Using the EU Cities dataset as a case study, we compare the quality of results produced by a naïve single-shot LLM query with those produced by our structured execution plans. Our findings show substantial improvements in tuple completeness and attribute accuracy. 
+This stage of the project implements a minimal subset of the GALOIS framework and demonstrates it on the EU Cities query used in the original paper. We develop three operators: \textit{LLMScan}, \textit{Filter-LLMScan}, and a \textit{Two-Phase Key-First Retrieval} operator, supported by a simple pushdown optimizer and WHERE-clause evaluator. Using this single end-to-end query, we compare a naïve one-shot LLM response with the results produced by our execution plans. This system shows that structured operator-based decomposition yields more complete and reliable results than naïve prompting.
 \end{abstract}
 
+
 \section{Introduction}
-Large Language Models (LLMs) have emerged as powerful tools for structured and semi-structured information retrieval. However, when used as virtual relational databases, their behavior often diverges significantly from that of deterministic query processors: LLMs tend to return incomplete sets of tuples, hallucinate values, and inconsistently apply filtering predicates. These limitations become especially evident in SQL-like tasks involving enumeration over large entity sets or multi-attribute schema reconstruction.
+ In the previous phase of this project, we implemented and evaluated the NL and SQL baselines used in the GALOIS paper. That work demonstrated the core challenge: neither natural-language prompting nor plain SQL prompting yields the complete, structured, and predicate-respecting result sets expected from a database system. Our replication confirmed that LLMs frequently omit valid rows, mis-handle multi-attribute queries, and degrade further when queries contain complex constraints. These observations directly motivate the need for the operator-based execution layer introduced by GALOIS. 
 
-In a previous report, we implemented and evaluated two baseline strategies—Natural Language prompting and direct SQL-style prompting—across multiple LLM providers. While these baselines established a foundation for understanding model capabilities, they also revealed substantial mismatch between naïve prompting and the requirements of reliable tuple retrieval. In particular, the results showed that even strong models frequently omit valid entities, produce partially formed tuples, or fail to respect compositional predicates.
+The goal of this phase is to implement a minimal subset of that execution layer and evaluate whether structured query decomposition improves retrieval quality. Instead of treating the model as a text generator that must answer a query in one pass, GALOIS proposes interacting with the LLM through a sequence of logical and physical operators—such as iterative scans, selective predicate pushdown, and key-first retrieval—that break a SQL query into simpler subproblems the LLM can answer more reliably. By implementing \textit{LLMScan}, \textit{Filter-LLMScan}, and a \textit{Two-Phase Key-First Retrieval} operator, along with a lightweight optimizer and WHERE-clause evaluator, we reproduce the essential ideas behind this approach. 
 
-The present work builds upon those findings and introduces a more structured LLM query execution pipeline inspired by the GALOIS framework. Instead of relying solely on a single prompt per query, we implement a set of operator-level mechanisms designed to decompose a query into smaller, semantically meaningful interactions with the model. Specifically, we develop three key components: an iterative retrieval operator (\textit{LLMScan}), a predicate-aware variant (\textit{Filter-LLMScan}), and a \textit{Two-Phase Key-First Retrieval} operator modeled after the Key-Scan mechanism in GALOIS. By applying these operators to a real-world example from the EU Cities dataset, we demonstrate that structured decomposition substantially improves tuple completeness and attribute accuracy compared to the previously studied baselines.
-
-This report thus represents the second stage in a broader effort to reconstruct the essential ideas of GALOIS and evaluate their effectiveness in practical LLM-driven query processing.
-
-\section{Background and Motivation}
-
-While LLMs are capable of generating syntactically valid SQL-style outputs, they lack the deterministic enumeration guarantees of a relational engine. As shown in prior work, models often recall only the most salient entities, omitting valid but less commonly mentioned items. Multi-attribute tuples amplify this issue, as the model must simultaneously satisfy multiple constraints.
-
-GALOIS addresses these issues through operator decomposition, iterative prompting, and selective predicate pushdown. Our implementation adopts these principles and evaluates their effectiveness in a constrained but realistic setting.
+To match the original GALOIS paper, we test our implementation on the same EU Cities example query. This experiment allows us to directly compare naïve prompting to plan-based execution and to measure whether structured operators produce more complete and accurate tuple sets.
 
 \section{Baselines Implementation}
 
