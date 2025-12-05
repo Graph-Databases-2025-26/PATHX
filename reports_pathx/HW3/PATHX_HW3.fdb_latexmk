@@ -1,5 +1,5 @@
 # Fdb version 4
-["pdflatex"] 1764959449.78539 "d:/GRAPH DATABASE/pathX/PathX/reports_pathx/HW3/PATHX_HW3.tex" "PATHX_HW3.pdf" "PATHX_HW3" 1764959451.45694 0
+["pdflatex"] 1764961287.50991 "d:/GRAPH DATABASE/pathX/PathX/reports_pathx/HW3/PATHX_HW3.tex" "PATHX_HW3.pdf" "PATHX_HW3" 1764961289.45391 0
   "C:/Users/Bita/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map" 1764942638 82507 a9eef8696c92627b87e9975edea03b2a ""
   "C:/Users/Bita/AppData/Local/MiKTeX/miktex/data/le/pdftex/pdflatex.fmt" 1764943142 13333068 545e33e091c5e33a6184f958050262f4 ""
   "C:/Users/Bita/AppData/Local/Programs/MiKTeX/fonts/tfm/public/amsfonts/cmextra/cmex7.tfm" 1233951848 1004 54797486969f23fa377b128694d548df ""
@@ -78,13 +78,15 @@
   "C:/Users/Bita/AppData/Local/Programs/MiKTeX/tex/latex/setspace/setspace.sty" 1670403145 22490 8cac309b79a4c53a4ffce4b1b07aead0 ""
   "C:/Users/Bita/AppData/Local/Programs/MiKTeX/tex/latex/tools/array.sty" 1761901070 15651 9d7c62df82cb29a555c00550babfe364 ""
   "C:/Users/Bita/AppData/Local/Programs/MiKTeX/tex/latex/url/url.sty" 1388490452 12796 8edb7d69a20b857904dd0ea757c14ec9 ""
-  "PATHX_HW3.aux" 1764959451 3689 75d53c15a4067d6bff702c080746574a "pdflatex"
-  "PATHX_HW3.out" 1764959451 2376 f1c4ba294074616c5a85c7f328b6a211 "pdflatex"
-  "PATHX_HW3.tex" 1764959448 15261 7d423538840fab9c9a47cf995bbef729 ""
-  "d:/GRAPH DATABASE/pathX/PathX/reports_pathx/HW3/PATHX_HW3.tex" 1764959448 15261 7d423538840fab9c9a47cf995bbef729 ""
+  "PATHX_HW3.aux" 1764961289 3689 28daaffda882f4c4bf5d22403dacc129 "pdflatex"
+  "PATHX_HW3.out" 1764961289 2376 f1c4ba294074616c5a85c7f328b6a211 "pdflatex"
+  "PATHX_HW3.tex" 1764961285 15293 bd77e012f3261c69c5c85bb518872006 ""
+  "PATHX_HW3.toc" 1764961289 1267 e5445630253155314aac489b8da1f7e9 "pdflatex"
+  "d:/GRAPH DATABASE/pathX/PathX/reports_pathx/HW3/PATHX_HW3.tex" 1764961285 15293 bd77e012f3261c69c5c85bb518872006 ""
   (generated)
   "PATHX_HW3.aux"
   "PATHX_HW3.log"
   "PATHX_HW3.out"
   "PATHX_HW3.pdf"
+  "PATHX_HW3.toc"
   (rewritten before read)

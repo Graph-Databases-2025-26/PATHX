@@ -19,8 +19,12 @@
 }
 \date{5 Decamber 2025}
 
+
 \begin{document}
+
 \maketitle
+\tableofcontents
+\newpage
 
 \begin{abstract}
 Large Language Models (LLMs) contain substantial factual knowledge encoded within their parameters. However, when used as virtual relational databases, LLMs exhibit incomplete tuple retrieval, hallucinations, and inconsistencies. Inspired by the GALOIS framework, this work implements a minimal query execution layer consisting of three core operators: \textit{LLMScan}, \textit{Filter-LLMScan}, and a \textit{Two-Phase Key-First Retrieval} operator. Using the EU Cities dataset as a case study, we compare the quality of results produced by a naïve single-shot LLM query with those produced by our structured execution plans. Our findings show substantial improvements in tuple completeness and attribute accuracy. 
