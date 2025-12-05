@@ -26,16 +26,53 @@ class WhereEvaluator:
     - No subqueries
     """
 
-    # Operator mappings
-    OPERATORS = {
-        '=': eq,
-        '!=': ne,
-        '<>': ne,
-        '<': lt,
-        '<=': le,
-        '>': gt,
-        '>=': ge,
-    }
+    # Operator mappings (ordered to avoid '=' catching '>=' / '<=' etc.)
+    OPERATORS = [
+        ('>=', ge),
+        ('<=', le),
+        ('<>', ne),
+        ('!=', ne),
+        ('=', eq),
+        ('>', gt),
+        ('<', lt),
+    ]
+
+    def _evaluate_comparison(self, condition: str, row: Dict[str, Any]) -> bool:
+        """Evaluate comparison operators (=, !=, <, >, etc.)"""
+
+        cond = condition.strip()
+
+        # Try each operator, in order (longest first)
+        for op_str, op_func in self.OPERATORS:
+            if op_str in cond:
+                parts = cond.split(op_str, 1)
+                if len(parts) != 2:
+                    continue
+
+                left = parts[0].strip()
+                right = parts[1].strip()
+
+                # Get values
+                left_val = self._get_value(left, row)
+                right_val = self._parse_literal(right)
+
+                # Handle NULL comparisons (we just treat them as False here;
+                # IS NULL / IS NOT NULL обрабатываются в _evaluate_condition)
+                if left_val is None or right_val is None:
+                    return False
+
+                # Type coercion for comparison
+                left_val, right_val = self._coerce_types(left_val, right_val)
+
+                try:
+                    return op_func(left_val, right_val)
+                except Exception:
+                    return False
+
+        # No operator found - treat as boolean attribute
+        attr = cond
+        val = row.get(attr)
+        return bool(val)
 
     @staticmethod
     def filter_rows(rows: List[Dict[str, Any]], where_clause: str) -> List[Dict[str, Any]]:
@@ -112,13 +149,19 @@ class WhereEvaluator:
                 return self._evaluate_logical(condition[1:-1], row)
         
         # Handle IS NULL / IS NOT NULL
-        if 'IS NOT NULL' in condition.upper():
-            attr = condition.upper().split('IS NOT NULL')[0].strip()
-            return row.get(attr) is not None
+        upper = condition.upper()
+
+        if 'IS NOT NULL' in upper:
+            # use original condition to preserve column name casing
+            attr_expr = re.split(r'\s+IS\s+NOT\s+NULL', condition, flags=re.IGNORECASE)[0].strip()
+            val = self._get_value(attr_expr, row)
+            return val is not None
         
-        if 'IS NULL' in condition.upper():
-            attr = condition.upper().split('IS NULL')[0].strip()
-            return row.get(attr) is None
+        if 'IS NULL' in upper:
+            attr_expr = re.split(r'\s+IS\s+NULL', condition, flags=re.IGNORECASE)[0].strip()
+            val = self._get_value(attr_expr, row)
+            return val is None
+
         
         # Handle LIKE
         if ' LIKE ' in condition.upper():
@@ -130,38 +173,6 @@ class WhereEvaluator:
         
         # Handle comparison operators
         return self._evaluate_comparison(condition, row)
-
-    def _evaluate_comparison(self, condition: str, row: Dict[str, Any]) -> bool:
-        """Evaluate comparison operators (=, !=, <, >, etc.)"""
-        
-        # Try each operator
-        for op_str, op_func in self.OPERATORS.items():
-            if op_str in condition:
-                parts = condition.split(op_str, 1)
-                if len(parts) == 2:
-                    left = parts[0].strip()
-                    right = parts[1].strip()
-                    
-                    # Get values
-                    left_val = self._get_value(left, row)
-                    right_val = self._parse_literal(right)
-                    
-                    # Handle NULL comparisons
-                    if left_val is None or right_val is None:
-                        return False
-                    
-                    # Type coercion for comparison
-                    left_val, right_val = self._coerce_types(left_val, right_val)
-                    
-                    try:
-                        return op_func(left_val, right_val)
-                    except Exception:
-                        return False
-        
-        # No operator found - treat as boolean attribute
-        attr = condition.strip()
-        val = row.get(attr)
-        return bool(val)
 
     def _evaluate_like(self, condition: str, row: Dict[str, Any]) -> bool:
         """Evaluate LIKE pattern matching"""

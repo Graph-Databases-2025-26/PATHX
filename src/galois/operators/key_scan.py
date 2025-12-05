@@ -110,43 +110,59 @@ class KeyScanOperator(BaseScanOperator):
     ) -> tuple[List[Dict], float, int]:
         """
         Step 1: Iteratively retrieve all key values.
-        
-        Returns:
-            (list_of_key_dicts, total_time, total_tokens)
+        Follow-up prompts include context of previously retrieved keys.
         """
         all_keys: List[Dict] = []
         seen: Set = set()
-        
+
         total_time = 0.0
         total_tokens = 0
 
-        for i in range(self.max_iters):
-            if i == 0:
-                prompt = PromptTemplates.key_scan_first(
-                    dataset=dataset,
-                    table=table,
-                    key_attributes=key_attributes,
-                    where_clause=where_clause,
-                )
-            else:
-                prompt = PromptTemplates.key_scan_followup()
+        # -------- FIRST ITERATION --------
+        prompt = PromptTemplates.key_scan_first(
+            dataset=dataset,
+            table=table,
+            key_attributes=key_attributes,
+            where_clause=where_clause,
+        )
 
-            raw, elapsed, tokens = self._call_llm(prompt)
+        raw, elapsed, tokens = self._call_llm(prompt)
+        total_time += elapsed
+        total_tokens += tokens
+
+        content = self._get_content(raw)
+        parsed = ResponseParser.parse_llm_response(content, elapsed, tokens)
+
+        keys_batch = parsed["result_set"]
+        new_keys = _filter_new_rows(keys_batch, seen)
+        all_keys.extend(new_keys)
+
+        # If no keys found in first iteration then stop immediately
+        if not new_keys:
+            return all_keys, total_time, total_tokens
+
+        # -------- FOLLOW-UP ITERATIONS --------
+        for i in range(1, self.max_iters):
+            followup_prompt = PromptTemplates.key_scan_followup(previous_keys=all_keys)
+
+            raw, elapsed, tokens = self._call_llm(followup_prompt)
             total_time += elapsed
             total_tokens += tokens
 
             content = self._get_content(raw)
             parsed = ResponseParser.parse_llm_response(content, elapsed, tokens)
-            
+
             keys_batch = parsed["result_set"]
-            new_keys = _filter_new_rows(keys_batch, seen)
+            only_new = _filter_new_rows(keys_batch, seen)
 
-            if not new_keys:
-                break  # No new keys found
+            # If no new keys found then stop
+            if not only_new:
+                break
 
-            all_keys.extend(new_keys)
+            all_keys.extend(only_new)
 
         return all_keys, total_time, total_tokens
+
 
     def _retrieve_tuple(
         self,
@@ -157,12 +173,12 @@ class KeyScanOperator(BaseScanOperator):
     ) -> tuple[Dict[str, Any], float, int]:
         """
         Step 2: Get remaining attributes for a specific key.
-        
+
         Returns:
             (dict_of_non_key_values, time, tokens)
         """
-        # Extract key name and value
-        key_name = list(key_row.keys())[0]  # Assumes single key
+        # Extract key name and value (single-attribute key assumption)
+        key_name = list(key_row.keys())[0]
         key_value = key_row[key_name]
 
         prompt = PromptTemplates.key_scan_tuple(
@@ -175,20 +191,21 @@ class KeyScanOperator(BaseScanOperator):
 
         raw, elapsed, tokens = self._call_llm(prompt)
         content = self._get_content(raw)
-        
+
         try:
-            # Response should be flat dict: {"attr1": "val1", "attr2": "val2"}
+            # Response should be flat dict: {"attr1": "val1", "attr2": "val2", ...}
             response_json = ResponseParser.extract_json(content)
-            
-            # Filter to only requested attributes
+
+            # Гарантируем, что в результате есть ВСЕ non_key_attributes
             tuple_data = {
-                attr: response_json.get(attr)
+                attr: response_json.get(attr, None)
                 for attr in non_key_attributes
-                if attr in response_json
             }
-            
+
             return tuple_data, elapsed, tokens
+
         except Exception as e:
-            print(f"Warning: Failed to parse tuple data: {e}")
-            # Return empty values
+            print(f"Warning: Failed to parse tuple data for key {key_name}={key_value}: {e}")
+            print(f"  Raw content (truncated): {content[:200]}...")
+            # На ошибке возвращаем None для всех полей
             return {attr: None for attr in non_key_attributes}, elapsed, tokens

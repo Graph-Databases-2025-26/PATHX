@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from ..operators.table_scan import TableScanOperator
+from ..utils.where_evaluator import WhereEvaluator
 
 
 class GaloisA:
@@ -37,20 +38,21 @@ class GaloisA:
         attributes: List[str],
         where_clause: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Execute query with push-all strategy.
-        
-        Simply delegates to Table-Scan with full WHERE clause.
-        """
         result = self.table_scan.scan(
             dataset=dataset,
             table=table,
             attributes=attributes,
-            where_clause=where_clause,  # Push everything
+            where_clause=where_clause,   # full pushdown to LLM
         )
-        
-        # Add strategy metadata
-        result["meta"]["variant"] = "Galois_A"
-        result["meta"]["pushdown"] = "all"
-        
+
+        # post-filtering (in case LLM made mistakes)
+        if where_clause:
+            result["result_set"] = WhereEvaluator.filter_rows(
+                result["result_set"], where_clause
+            )
+
+        meta = result.setdefault("meta", {})
+        meta["variant"] = "Galois_A"
+        meta["pushdown"] = "all"
+
         return result

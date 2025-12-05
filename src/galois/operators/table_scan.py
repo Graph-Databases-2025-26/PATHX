@@ -32,32 +32,24 @@ class TableScanOperator(BaseScanOperator):
         where_clause: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Execute Table-Scan with iterative retrieval.
-        
-        Args:
-            dataset: Dataset name (e.g., "WORLD")
-            table: Table name (e.g., "city")
-            attributes: List of attribute names to retrieve
-            where_clause: Optional SQL WHERE clause (without "WHERE")
-        
-        Returns:
-            Dict with result_set, time, tokens, and metadata
+        Execute Table-Scan with iterative retrieval (Algorithm 1 in GALOIS).
+        Now follow-up prompts include context of previously retrieved rows.
         """
         all_rows: List[Dict] = []
         seen: Set[Tuple] = set()
-        
+
         total_time = 0.0
         total_tokens = 0
         iterations_used = 0
 
-        # Initial call
+        # --- FIRST ITERATION ---
         first_prompt = PromptTemplates.table_scan_first(
             dataset=dataset,
             table=table,
             attributes=attributes,
             where_clause=where_clause,
         )
-        
+
         raw_first, elapsed, iter_tokens = self._call_llm(first_prompt)
         total_time += elapsed
         total_tokens += iter_tokens
@@ -65,16 +57,30 @@ class TableScanOperator(BaseScanOperator):
         content = self._get_content(raw_first)
         parsed_first = ResponseParser.parse_llm_response(content, elapsed, iter_tokens)
         rows = parsed_first["result_set"]
+
+        # Deduplicate
         new_rows = _filter_new_rows(rows, seen)
         all_rows.extend(new_rows)
 
-        # Follow-up iterations
-        for i in range(1, self.max_iters + 1):
-            if not all_rows:
-                # First iteration returned nothing, no point continuing
-                break
+        # If first iteration yields nothing → stop immediately
+        if not all_rows:
+            return {
+                "result_set": [],
+                "time": round(total_time, 3),
+                "tokens": total_tokens,
+                "meta": {
+                    "iterations_used": 1,
+                    "strategy": "table_scan",
+                },
+            }
 
-            followup_prompt = PromptTemplates.table_scan_followup()
+        iterations_used = 1  # first iteration counted
+
+        # --- FOLLOW-UP ITERATIONS ---
+        for i in range(1, self.max_iters + 1):
+            # build context-based follow-up
+            followup_prompt = PromptTemplates.table_scan_followup(previous_rows=all_rows)
+
             raw_next, elapsed, iter_tokens = self._call_llm(followup_prompt)
             total_time += elapsed
             total_tokens += iter_tokens
@@ -82,14 +88,15 @@ class TableScanOperator(BaseScanOperator):
             content = self._get_content(raw_next)
             parsed_next = ResponseParser.parse_llm_response(content, elapsed, iter_tokens)
             rows_next = parsed_next["result_set"]
+
             only_new = _filter_new_rows(rows_next, seen)
 
+            # Stop if no new rows appear
             if not only_new:
-                # Stop condition: no new rows
                 break
 
-            iterations_used += 1
             all_rows.extend(only_new)
+            iterations_used += 1
 
         return {
             "result_set": all_rows,
@@ -100,3 +107,4 @@ class TableScanOperator(BaseScanOperator):
                 "strategy": "table_scan",
             },
         }
+
