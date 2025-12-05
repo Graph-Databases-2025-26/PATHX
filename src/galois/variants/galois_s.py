@@ -61,7 +61,7 @@ class GaloisS:
         # Parse conditions
         conditions = PushdownOptimizer.parse_conditions(where_clause)
 
-        # CASE 1 — 0 или 1 условие
+        # CASE 1 — zero or one condition
         if len(conditions) <= 1:
             result = self.table_scan.scan(
                 dataset=dataset,
@@ -70,7 +70,7 @@ class GaloisS:
                 where_clause=where_clause,
             )
 
-            # пост-фильтр на полном WHERE
+            # Post-filter using the full WHERE clause
             if where_clause:
                 result["result_set"] = WhereEvaluator.filter_rows(result["result_set"], where_clause)
 
@@ -82,7 +82,7 @@ class GaloisS:
 
             return result
 
-        # CASE 2 — несколько условий → вызываем LLM для selectivity
+        # CASE 2 — multiple conditions; call LLM to evaluate selectivity
         selectivity_map, sel_time, sel_tokens = self._evaluate_selectivity(
             dataset, table, conditions
         )
@@ -152,5 +152,4 @@ class GaloisS:
         except Exception as e:
             print(f"Warning: Failed to evaluate selectivity: {e}")
             return ({cond: "lower" for cond in conditions}, 0.0, 0)
-
 

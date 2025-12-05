@@ -57,7 +57,7 @@ class WhereEvaluator:
                 right_val = self._parse_literal(right)
 
                 # Handle NULL comparisons (we just treat them as False here;
-                # IS NULL / IS NOT NULL обрабатываются в _evaluate_condition)
+                # IS NULL / IS NOT NULL are handled in _evaluate_condition)
                 if left_val is None or right_val is None:
                     return False
 

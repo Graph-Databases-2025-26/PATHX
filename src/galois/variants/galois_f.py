@@ -83,7 +83,7 @@ class GaloisF:
 
         # STEP 1: LOGICAL OPTIMIZATION
         if len(conditions) <= 1:
-            # Single or no condition: push it as is, без отдельной оценки
+            # Single or no condition: push it as-is without separate evaluation
             pushdown_clause = where_clause
             confidence_map: Dict[str, str] = {}
             conf_eval_time = 0.0
@@ -227,5 +227,4 @@ class GaloisF:
         except Exception as e:
             print(f"Warning: Failed to estimate key confidence: {e}")
             return 0.5, 0.0, 0
-
 

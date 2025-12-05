@@ -196,7 +196,7 @@ class KeyScanOperator(BaseScanOperator):
             # Response should be flat dict: {"attr1": "val1", "attr2": "val2", ...}
             response_json = ResponseParser.extract_json(content)
 
-            # Гарантируем, что в результате есть ВСЕ non_key_attributes
+            # Ensure the result contains all non_key_attributes
             tuple_data = {
                 attr: response_json.get(attr, None)
                 for attr in non_key_attributes
@@ -207,5 +207,5 @@ class KeyScanOperator(BaseScanOperator):
         except Exception as e:
             print(f"Warning: Failed to parse tuple data for key {key_name}={key_value}: {e}")
             print(f"  Raw content (truncated): {content[:200]}...")
-            # На ошибке возвращаем None для всех полей
+            # On parse error, return None for all fields
             return {attr: None for attr in non_key_attributes}, elapsed, tokens
