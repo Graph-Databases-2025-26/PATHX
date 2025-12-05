@@ -110,116 +110,132 @@ class GaloisRunner:
         
         return results
 
-    def compare_results(self, results: Dict[str, Any]) -> None:
-            """
-            Print comparison table of results (similar to compare_results.py).
-            """
-            # -------- SUMMARY TABLE --------
-            summary_rows = []
+    def compare_results(
+        self,
+        results: Dict[str, Any],
+        extra_results: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Print comparison table of results.
 
-            for variant_name, result in results.items():
-                if "error" in result:
-                    summary_rows.append(
-                        {
-                            "Variant": variant_name,
-                            "Rows": "ERROR",
-                            "Tokens": "",
-                            "Time (s)": "",
-                            "Strategy": result["error"][:40] + ("..." if len(result["error"]) > 40 else ""),
-                        }
-                    )
-                    continue
+        results       – стандартные Galois-варианты
+        extra_results – дополнительные варианты (например, Naive_LLM),
+                        которые тоже попадут в summary и RESULT SET CONTENT.
+        """
+        # объединяем, но сохраняем порядок: сначала Galois, потом extra
+        all_results: Dict[str, Any] = dict(results)
+        if extra_results:
+            for name, res in extra_results.items():
+                if name in all_results:
+                    # на всякий случай, чтобы не перезаписать
+                    name = f"{name}_extra"
+                all_results[name] = res
 
-                strategy = result.get("meta", {}).get("strategy", "N/A")
+        # -------- SUMMARY TABLE --------
+        summary_rows = []
+
+        for variant_name, result in all_results.items():
+            if "error" in result:
                 summary_rows.append(
                     {
                         "Variant": variant_name,
-                        "Rows": len(result.get("result_set", [])),
-                        "Tokens": result.get("tokens", 0),
-                        "Time (s)": result.get("time", 0.0),
-                        "Strategy": strategy,
+                        "Rows": "ERROR",
+                        "Tokens": "",
+                        "Time (s)": "",
+                        "Strategy": result["error"][:40]
+                        + ("..." if len(result["error"]) > 40 else ""),
                     }
                 )
+                continue
 
-            df_summary = pd.DataFrame(summary_rows)
+            strategy = result.get("meta", {}).get("strategy", "N/A")
+            summary_rows.append(
+                {
+                    "Variant": variant_name,
+                    "Rows": len(result.get("result_set", [])),
+                    "Tokens": result.get("tokens", 0),
+                    "Time (s)": result.get("time", 0.0),
+                    "Strategy": strategy,
+                }
+            )
 
-            print("\nCOMPARISON SUMMARY")
+        df_summary = pd.DataFrame(summary_rows)
+
+        print("\nCOMPARISON SUMMARY")
+        print(
+            tabulate(
+                df_summary,
+                headers="keys",
+                tablefmt="psql",
+                showindex=False,
+                floatfmt=".2f",
+            )
+        )
+
+        # -------- RESULT SET CONTENT --------
+        print("\nRESULT SET CONTENT")
+
+        for variant_name, result in all_results.items():
+            print(f"\n=== {variant_name} ===")
+
+            if "error" in result:
+                print(f"ERROR: {result['error']}")
+                continue
+
+            result_set = result.get("result_set", [])
+
+            if not result_set:
+                print("(empty result set)")
+                continue
+
+            if isinstance(result_set[0], dict):
+                df_rs = pd.DataFrame(result_set)
+            else:
+                df_rs = pd.DataFrame({"Row": result_set})
+
             print(
                 tabulate(
-                    df_summary,
+                    df_rs,
                     headers="keys",
                     tablefmt="psql",
                     showindex=False,
-                    floatfmt=".2f",
                 )
             )
 
-            # -------- RESULT SET CONTENT --------
-            print("\nRESULT SET CONTENT")
+        # -------- TOKEN COST (только по отношению к Galois_WO) --------
+        baseline_name = "Galois_WO"
+        if baseline_name in all_results and "error" not in all_results[baseline_name]:
+            baseline_tokens = all_results[baseline_name].get("tokens", 0) or 0
 
-            for variant_name, result in results.items():
-                print(f"\n=== {variant_name} ===")
-
-                if "error" in result:
-                    print(f"ERROR: {result['error']}")
+            token_rows = []
+            for variant_name, result in all_results.items():
+                if variant_name == baseline_name or "error" in result:
                     continue
 
-                result_set = result.get("result_set", [])
+                tokens = result.get("tokens", 0) or 0
+                ratio = tokens / baseline_tokens if baseline_tokens > 0 else 0.0
+                reduction = (1 - ratio) * 100 if baseline_tokens > 0 else 0.0
 
-                if not result_set:
-                    print("(empty result set)")
-                    continue
+                token_rows.append(
+                    {
+                        "Variant": variant_name,
+                        "Tokens": tokens,
+                        "Rel. cost": f"{ratio:.1%}",
+                        "Reduction": f"{reduction:+.1f}%",
+                    }
+                )
 
-                # result_set: list of dicts -> DataFrame
-                if isinstance(result_set[0], dict):
-                    df_rs = pd.DataFrame(result_set)
-                else:
-                    # Fallback if it's just a list of values/tuples
-                    df_rs = pd.DataFrame({"Row": result_set})
-
+            if token_rows:
+                df_tokens = pd.DataFrame(token_rows)
+                print("\nTOKEN COST RELATIVE TO Galois_WO")
                 print(
                     tabulate(
-                        df_rs,
+                        df_tokens,
                         headers="keys",
                         tablefmt="psql",
                         showindex=False,
                     )
                 )
-
-            # -------- TOKEN COST COMPARISON --------
-            baseline_name = "Galois_WO"
-            if baseline_name in results and "error" not in results[baseline_name]:
-                baseline_tokens = results[baseline_name].get("tokens", 0) or 0
-
-                token_rows = []
-                for variant_name, result in results.items():
-                    if variant_name == baseline_name or "error" in result:
-                        continue
-
-                    tokens = result.get("tokens", 0) or 0
-                    ratio = tokens / baseline_tokens if baseline_tokens > 0 else 0.0
-                    reduction = (1 - ratio) * 100 if baseline_tokens > 0 else 0.0
-
-                    token_rows.append(
-                        {
-                            "Variant": variant_name,
-                            "Tokens": tokens,
-                            "Rel. cost": f"{ratio:.1%}",
-                            "Reduction": f"{reduction:+.1f}%",
-                        }
-                    )
-
-                if token_rows:
-                    df_tokens = pd.DataFrame(token_rows)
-                    print("\nTOKEN COST RELATIVE TO Galois_WO")
-                    print(
-                        tabulate(
-                            df_tokens,
-                            headers="keys",
-                            tablefmt="psql",
-                            showindex=False,
-                        )
-                    )
 
 
     def save_results(self, results: Dict[str, Any], filepath: str) -> None:
