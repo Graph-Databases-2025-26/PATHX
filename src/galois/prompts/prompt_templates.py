@@ -80,7 +80,7 @@ Start your response with {{ and end with }}"""
             else ""
         )
 
-        # Используем реальное имя ключевого атрибута в примере
+        # Use first key attribute as example key in prompt
         example_key = key_attributes[0] if key_attributes else "key"
         
         return f"""You are an expert data assistant.
