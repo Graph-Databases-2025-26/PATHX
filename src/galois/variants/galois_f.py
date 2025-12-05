@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 from ..operators.table_scan import TableScanOperator
 from ..operators.key_scan import KeyScanOperator
 from ..optimizers.pushdown import PushdownOptimizer
-from ..prompts.prompt_templates import PromptTemplates
+from ..prompts.templates import PromptTemplates
 from ..utils.response_parser import ResponseParser
 import time
 from ..utils.where_evaluator import WhereEvaluator

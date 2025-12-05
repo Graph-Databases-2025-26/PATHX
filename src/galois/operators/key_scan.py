@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Set
 
 from .base_scan import BaseScanOperator, _filter_new_rows
-from ..prompts.prompt_templates import PromptTemplates
+from ..prompts.templates import PromptTemplates
 from ..utils.response_parser import ResponseParser
 
 

@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from ..operators.table_scan import TableScanOperator
 from ..optimizers.pushdown import PushdownOptimizer
-from ..prompts.prompt_templates import PromptTemplates
+from ..prompts.templates import PromptTemplates
 from ..utils.response_parser import ResponseParser
 from ..utils.where_evaluator import WhereEvaluator
 import time
