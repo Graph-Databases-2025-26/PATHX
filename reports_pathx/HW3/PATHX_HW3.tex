@@ -1,0 +1,86 @@
+\documentclass[12pt]{article}
+\usepackage{geometry}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{array}
+
+\geometry{a4paper, margin=1in}
+\onehalfspacing
+
+\title{PATHX \\ \large Demo for testing and running GALOIS system}
+\author{
+    Danil Smirnov \\
+    Bita Khashechian \\
+    Minseok Kim \\
+    Juliette Tonneau
+}
+\date{19 November 2025}
+
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+Large Language Models (LLMs) have recently demonstrated an unexpected ability to generate structured information resembling the output of database queries. Even though these models do not explicitly store relational tables, they often internalize enough associations to answer queries such as ``List European cities with more than one million inhabitants.'' This has encouraged researchers to investigate whether LLMs can operate as approximate database engines.
+
+However, LLMs are extremely sensitive to the phrasing of prompts. A poorly formulated query may lead to partial results, hallucinated entries, or unstructured responses that are difficult to parse. These inconsistencies make it challenging to compare different querying strategies or assess their efficiency.
+
+The Galois framework was created to address these concerns. It provides a controlled and reproducible environment for executing structured queries against an LLM using several distinct strategies. Each strategy represents a different way of guiding the model, either by reducing hallucinations, improving recall, or minimizing token consumption. A key component of this framework, and one that was insufficiently detailed in earlier work, is the iterative retrieval mechanism that progressively gathers rows until the model exhausts its internal memory.
+
+This chapter presents a comprehensive explanation of the Galois system. It describes the design of the prompt construction module, the architecture of the multi-strategy execution engine, and the operation of the iterative retrieval mechanism. The overall goal is to explain the system clearly enough that other research groups can reproduce the experiments and compare their results.
+
+\section{Prompt Construction}
+
+The prompt construction module is responsible for generating the templates that the LLM uses to simulate table operations. Since LLMs respond differently depending on how questions are phrased, the system requires a consistent and well-structured language for interacting with the model. The prompts identify the dataset, specify the table of interest, list the relevant attributes, and provide any filtering conditions.
+
+A strict output format is imposed on the model so that the results are reliably parseable. The model is instructed to return only a JSON object containing an array of rows. This uniform structure prevents the inclusion of explanatory text or narrative elements, both of which are common when prompts do not explicitly forbid them.
+
+The prompt module also includes templates for additional tasks, such as retrieving unique keys, reconstructing attribute values once a key is known, estimating the selectivity of conditions, and evaluating the model’s confidence. These templates allow the different Galois strategies to behave distinctly while still operating under a shared set of linguistic rules. Without such standardization, results between strategies—or between research groups—could not be compared fairly.
+
+\section{The GaloisRunner Execution Engine}
+
+At the center of the framework lies the execution engine, which coordinates the application of multiple query strategies. It loads the configuration, initializes the LLM, and constructs the strategies known as Galois\_WO, Galois\_A, Galois\_S, and Galois\_F.
+
+Galois\_WO serves as a baseline that retrieves individual values in a piecemeal fashion. This approach is expensive in terms of token usage but is relatively cautious, often reducing hallucination. Galois\_A applies all query conditions in a single prompt and is therefore efficient, though it depends heavily on the model's ability to apply the conditions accurately.
+
+Galois\_S begins by asking the model to estimate the selectivity of each condition. Only those that are deemed highly selective are applied initially. This reduces hallucination risk while still improving efficiency relative to the baseline. Galois\_F, the most adaptive strategy, asks the model to evaluate its own confidence. If the confidence is high, the strategy acts similarly to Galois\_A; if confidence is low, it behaves more like Galois\_S.
+
+For each strategy, the engine reports the number of rows returned, the time spent, the number of tokens consumed, and additional metadata. These metrics allow researchers to study the strengths and weaknesses of each approach under identical conditions.
+
+\section{The Iterative Retrieval Mechanism}
+
+One of the most important parts of the Galois system is the iterative retrieval cycle, which ensures that the model returns as many relevant rows as possible. This section expands on the mechanism, as its explanation was previously lacking.
+
+LLMs rarely produce complete result sets in a single answer. They tend to generate a handful of rows and stop prematurely. To compensate for this behavior, the Galois framework does not assume that the initial response is complete. Instead, it adopts an iterative cycle.
+
+The system first sends an initial request for rows that match the query. After receiving the first set of results, it stores the returned rows. It then sends a follow-up request asking specifically for additional rows not previously listed. This process repeats until the model explicitly responds with an empty result set, signaling that it has no more rows to provide.
+
+This iterative mechanism transforms the LLM into a progressive iterator over the dataset. Every strategy uses the same iterative cycle; the difference lies only in how the initial request is formulated. The mechanism is essential for completeness and, more importantly, for the comparability of different strategies. Without iteration, one strategy might appear faster simply because it retrieved fewer rows, not because it was genuinely more efficient.
+
+\section{Interaction of Components During a Query}
+
+When the user issues a query specifying the dataset, table, attributes, and filtering conditions, the system begins by displaying a summary of the request. Each strategy then processes the query using its own logic, relying on the standard prompt templates to ensure consistency.
+
+The initial prompt retrieves the first set of rows, after which the iterative cycle begins. Each additional iteration attempts to uncover more rows until no more results exist. Once all strategies have completed their execution, the system prints a comparison table showing performance metrics and the number of rows retrieved by each variant.
+
+The final results are also saved to a file. This enables deeper analysis, supports reproducibility, and allows researchers to compare their findings across implementations.
+
+\section{Discussion}
+
+The Galois framework offers a structured methodology for understanding how LLMs behave when tasked with producing relational information. By using standardized prompts and a unified execution engine, it ensures that the strategies can be compared on equal footing. The iterative retrieval mechanism plays a central role in guaranteeing completeness and fairness. It ensures that all strategies continue querying until they exhaust the model's internal knowledge.
+
+The strategies themselves reflect different trade-offs. The baseline emphasizes caution and completeness, while the optimized approaches emphasize efficiency and adaptive reasoning. The combination of these methods allows researchers to investigate how prompting styles influence performance and accuracy.
+
+\section{Conclusion}
+
+This chapter presents a detailed and structured explanation of the Galois framework. It addresses shortcomings in previous reports by offering a clearer and more comprehensive explanation of the iterative retrieval mechanism and by presenting the components of the system in a coherent academic style.
+
+The framework provides a practical platform for exploring how LLMs can act as approximate databases. With standardized prompts, an extensible set of strategies, and a rigorously defined iterative cycle, it offers a reproducible and comparable environment for research on LLM-based data retrieval.
+
+
+\end{document}
