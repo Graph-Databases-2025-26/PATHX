@@ -252,6 +252,15 @@ Galois\_F  & 7 & 2202  & 14.76 & key\_scan \\
 
 \subsection{Result Set Outputs}
 
+To test different variants of our GALOIS-inspired execution engine, we executed the following SQL query against the EU Cities dataset:
+\begin{verbatim}
+SELECT name, country, population, num_private_hospitals
+FROM eu_cities
+WHERE population > 1_000_000
+\end{verbatim}
+
+The tables below present the actual result sets returned by each variant of Galois, as well as the naive single-call LLM approach.
+
 \begin{table}[H]
 \centering
 \begin{tabular}{l l r r}
@@ -267,6 +276,7 @@ Paris  & France  & 2148000 & 25 \\
 \caption{Result set for the \texttt{Naive\_LLM} variant.}
 \label{tab:naive-llm}
 \end{table}
+
 
 
 \begin{table}[H]

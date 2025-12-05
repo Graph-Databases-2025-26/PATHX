@@ -13,12 +13,19 @@ _env = Environment(
 )
 
 def _render(template_name: str, context: dict) -> str:
+    """
+    Renders a Jinja2 template with the given context.
+    """
     tmpl = _env.get_template(template_name)
     return tmpl.render(**context).strip()
 
 def build_llmscan_first(dataset: str, table: str, attributes, where_clause=None):
+    """
+    Builds a prompt for the first LLM scan request.
+    """
     format_instructions = PARSER.get_format_instructions()
 
+    # Build condition text
     cond_text = (
         f"Only return rows that satisfy ALL of the following condition(s): {where_clause}"
         if where_clause else
@@ -27,6 +34,7 @@ def build_llmscan_first(dataset: str, table: str, attributes, where_clause=None)
 
     attrs_text = ", ".join(attributes) if attributes else "all relevant columns"
 
+    # Build context dictionary
     ctx = {
         "dataset": dataset,
         "table": table,
@@ -40,7 +48,11 @@ def build_llmscan_first(dataset: str, table: str, attributes, where_clause=None)
 
 def build_llmscan_followup(dataset: str, table: str, attributes, previous_rows, where_clause=None):
     format_instructions = PARSER.get_format_instructions()
+    """
+    Builds a prompt for follow-up LLM scan requests.
+    """
 
+    # Build condition text
     cond_text = (
         f"Only return rows that satisfy ALL of the following condition(s): {where_clause}"
         if where_clause else
@@ -49,6 +61,7 @@ def build_llmscan_followup(dataset: str, table: str, attributes, previous_rows, 
 
     attrs_text = ", ".join(attributes) if attributes else "all relevant columns"
 
+    # Build context dictionary
     ctx = {
         "dataset": dataset,
         "table": table,
