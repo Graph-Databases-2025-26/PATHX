@@ -1,6 +1,6 @@
-PWD d:\GRAPH DATABASE\pathX\PathX\HW1_report
+PWD d:\GRAPH DATABASE\pathX\PathX\reports_pathx\HW1
 INPUT C:\Users\Bita\AppData\Local\MiKTeX\miktex\data\le\pdftex\pdflatex.fmt
-INPUT d:\GRAPH DATABASE\pathX\PathX\HW1_report\report.tex
+INPUT d:\GRAPH DATABASE\pathX\PathX\reports_pathx\HW1\report.tex
 OUTPUT report.log
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\tex\latex\base\article.cls
 INPUT C:\Users\Bita\AppData\Local\Programs\MiKTeX\tex\latex\base\article.cls
