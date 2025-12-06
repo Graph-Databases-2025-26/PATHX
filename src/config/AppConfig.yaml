@@ -1,4 +1,4 @@
-llm_provider: "watsonx"       # watsonx | gemini | azure
+llm_provider: "azure"       # watsonx | gemini | azure
 prompt_strategy: "direct"     # direct | zero_shot | few_shot
 
 
@@ -58,3 +58,9 @@ evaluation:
     - "avg_score"
   output_format: "json"
   aggregate: true
+
+galois:
+  max_iterations: 5
+  confidence_threshold: 0.6
+
+

@@ -11,6 +11,7 @@ nl_baseline_results/
 ground/
 db/
 *.duckdb
+test_results/
 
 # Baseline-specific output directories
 nl_baseline_azure/
