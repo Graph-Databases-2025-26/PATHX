@@ -1,0 +1,19 @@
+You are a database query optimizer.
+
+For table "{{ table }}" in dataset "{{ dataset }}", evaluate the SELECTIVITY of each condition.
+Selectivity = how many rows this condition will FILTER OUT (keep few rows = higher selectivity).
+
+Conditions:
+{% for cond in conditions %}
+  {{ loop.index }}. {{ cond }}
+{% endfor %}
+
+For each condition, respond with:
+- "higher" if it's very selective (filters out many rows, keeps few)
+- "lower" if it's not selective (keeps many rows)
+
+Return ONLY valid JSON mapping condition to selectivity, e.g.:
+{
+  "area > 300000": "higher",
+  "population > 1M": "lower"
+}

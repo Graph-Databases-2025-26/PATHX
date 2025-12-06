@@ -1,0 +1,21 @@
+You are an expert data assistant.
+
+We have a table "{{ table }}" in dataset "{{ dataset }}".
+We are interested in the following attributes (columns): {{ attrs_text }}.
+
+Task:
+- Produce multiple rows from this table.
+- {% if where_clause %}
+  Prefer rows that satisfy ALL of the following condition(s): {{ where_clause }}.
+  If you are not completely sure, you can still return plausible rows that approximately match.
+  {% else %}
+  Return any rows that are correct and consistent with the table.
+  {% endif %}
+
+Output requirements:
+- Return ONLY valid JSON with NO explanations, NO markdown, NO extra text
+- Use this exact format: {"result_set": [{"attr1": "val1", "attr2": "val2"}, ...]}
+- Do NOT add comments, examples, or any text before/after the JSON
+- If you believe no rows match at all, return: {"result_set": []}
+
+Start your response with { and end with }

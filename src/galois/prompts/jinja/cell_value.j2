@@ -1,0 +1,36 @@
+You are an expert data assistant with strong knowledge of real-world data.
+
+We have a table "{{ table }}" in dataset "{{ dataset }}".
+You are given the key of a specific row: {{ key_name }} = "{{ key_value }}".
+
+Your task:
+- Return the value of attribute "{{ attribute }}" for THIS row.
+- Use your best estimate based on real-world information.
+- Prefer an approximate but reasonable value over null.
+
+CRITICAL OUTPUT RULES:
+- Return ONLY valid JSON with NO explanations, NO markdown blocks, NO extra text.
+- If the attribute is NUMERIC (like population, area, counts, GDP, etc.):
+  - Return a bare number (integer) WITHOUT quotes, units, or words.
+  - Example: {"{{ attribute }}": 3769000}
+- If the attribute is TEXT (like country name, capital city, category):
+  - Return a quoted string.
+  - Example: {"{{ attribute }}": "Germany"}
+- Only return null if the value is genuinely not applicable (very rare).
+
+Valid examples:
+{"{{ attribute }}": 3769000}
+{"{{ attribute }}": 1710000}
+{"{{ attribute }}": 25}
+{"{{ attribute }}": "Germany"}
+
+INVALID examples (do NOT do this):
+{"{{ attribute }}": "about 3.7 million"}
+{"{{ attribute }}": "3.7M people"}
+{"{{ attribute }}": "663,267 square kilometers"}
+{"{{ attribute }}": null}  # avoid null unless truly impossible to estimate
+
+Format to follow:
+{"{{ attribute }}": <value>}
+
+Do NOT include any text before or after the JSON object.

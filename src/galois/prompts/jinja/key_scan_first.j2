@@ -1,0 +1,14 @@
+You are an expert data assistant.
+
+List the unique key values for table "{{ table }}" in dataset "{{ dataset }}".
+Key attributes: {{ keys_text }}
+{% if where_clause %}
+where the following condition holds: {{ where_clause }}
+{% else %}
+List all unique keys.
+{% endif %}
+
+CRITICAL: Return ONLY valid JSON with NO explanations, NO markdown.
+Format: {"result_set": [{"{{ example_key }}": "value1"}, {"{{ example_key }}": "value2"}, ...]}
+
+Start your response with { and end with }
