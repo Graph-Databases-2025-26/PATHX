@@ -6,6 +6,7 @@ from .llm_provider import (
     WatsonxWrapper,
     GeminiWrapper,
     AzureOpenAIWrapper,
+    AzureLlamaWrapper,
 )
 
 
@@ -13,6 +14,7 @@ PROVIDER_MAP = {
     "watsonx": WatsonxWrapper,
     "gemini": GeminiWrapper,
     "azure": AzureOpenAIWrapper,
+    "azure_llama": AzureLlamaWrapper,
 }
 
 

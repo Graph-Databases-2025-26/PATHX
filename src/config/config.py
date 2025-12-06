@@ -34,6 +34,15 @@ class AzureConfig(BaseModel):
     temperature: float
     max_tokens: int
 
+class AzureLlamaConfig(BaseModel):
+    api_key: str
+    endpoint: str
+    deployment: str
+    api_version: str
+    model: str
+    temperature: float
+    max_tokens: int
+
 
 class DatabaseConfig(BaseModel):
     type: str
@@ -77,6 +86,7 @@ class AppConfig(BaseModel):
     watsonx: WatsonXConfig
     gemini: GeminiConfig
     azure: AzureConfig
+    azure_llama: AzureLlamaConfig 
 
     database: DatabaseConfig
     io: IOConfig

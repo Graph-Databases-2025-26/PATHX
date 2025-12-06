@@ -8,7 +8,7 @@ from langchain_core.messages import BaseMessage
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ibm import ChatWatsonx
-from langchain_openai import AzureChatOpenAI
+from langchain_openai import AzureChatOpenAI, ChatOpenAI 
 
 from src.utils.logging import logger as LOG
 
@@ -90,6 +90,39 @@ class AzureOpenAIWrapper(LLMBaseWrapper):
             deployment_name=deployment,
             temperature=config.azure.temperature,
             max_tokens=config.azure.max_tokens,
+        )
+
+    def get_output_tokens(self, raw_response: BaseMessage) -> int:
+        usage = getattr(raw_response, "usage_metadata", None) or getattr(raw_response, "usage", None)
+        if isinstance(usage, dict):
+            return usage.get("completion_tokens", 0) or usage.get("output_tokens", 0)
+        return 0
+    
+class AzureLlamaWrapper(LLMBaseWrapper):
+    def get_provider_name(self) -> str:
+        return "azure_llama"
+
+    def _create_llm_instance(self, config) -> BaseChatModel:
+        endpoint = getattr(config.azure_llama, "endpoint", None) or os.getenv("AZURE_LLAMA_ENDPOINT")
+        api_key  = getattr(config.azure_llama, "api_key", None)  or os.getenv("AZURE_LLAMA_API_KEY")
+        model    = getattr(config.azure_llama, "deployment", None) or os.getenv("AZURE_LLAMA_DEPLOYMENT")
+        temperature = config.azure_llama.temperature
+        max_tokens  = config.azure_llama.max_tokens
+
+        if not (endpoint and api_key and model):
+            raise RuntimeError(
+                "Azure Llama config is incomplete "
+                "(endpoint/api_key/deployment). Check AppConfig.yaml and .env."
+            )
+
+        LOG.info(f"Creating Azure Llama LLM (deployment={model})")
+
+        return ChatOpenAI(
+            base_url=endpoint,
+            api_key=api_key,
+            model=model,        # "Llama-3.3-70B-Instruct"
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
 
     def get_output_tokens(self, raw_response: BaseMessage) -> int:

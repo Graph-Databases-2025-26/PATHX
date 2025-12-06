@@ -1,173 +1,150 @@
-"""
-Quick experiment:
-compare a naive single-call LLM query vs. the Galois variants (WO, A, S, F)
-on the EU_Cities query from the paper.
-"""
-
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
-
-import pandas as pd
-from tabulate import tabulate
+import time
+from typing import Any, Dict, List
 
 from src.galois.run_galois import GaloisRunner
-from src.galois.operators.base_scan import BaseScanOperator
-from src.galois.prompts.templates import PromptTemplates
-from src.galois.utils.response_parser import ResponseParser
 
 
-class NaiveLLMRunner(BaseScanOperator):
+NAIVE_PROMPT = """
+You are an expert knowledgeable about real-world data.
+
+Answer the following question using your world knowledge.
+
+Question:
+"What are size and population of European cities with more than 1M people and more than fifteen private hospitals?"
+
+Output format:
+- Provide a list of cities.
+- Use one line per city in the following format:
+  City | Country | Population | Number of private hospitals
+- Do NOT return JSON.
+- Do NOT provide explanations, comments, or reasoning.
+- Just list the results, one per line.
+"""
+
+
+def _call_llm(llm, prompt: str) -> tuple[str, float]:
+    """Call the underlying LLM and return (content, elapsed_seconds)."""
+    t0 = time.time()
+    raw = llm.invoke(prompt)
+    elapsed = time.time() - t0
+
+    # LangChain / OpenAI-style message objects usually have `.content`
+    content = getattr(raw, "content", str(raw))
+    return content, elapsed
+
+
+def _parse_naive_output(text: str) -> List[Dict[str, Any]]:
     """
-    Thin wrapper that reuses BaseScanOperator utilities (_call_llm, _get_content)
-    to run a *single* naive LLM query and still measure time & tokens.
+    Parse the naive bullet/line output into rows.
+
+    Expected format per line (as enforced by the prompt):
+
+        City | Country | Population | Number of private hospitals
+
+    We keep population / hospitals as strings; this is just for display.
     """
+    rows: List[Dict[str, Any]] = []
 
-    def __init__(self, llm):
-        super().__init__(llm, max_iters=1)
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
 
-    def scan(
-        self,
-        dataset: str,
-        table: str,
-        attributes: List[str],
-        where_clause: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        return self.run_naive(dataset, table, attributes, where_clause)
+        # allow optional leading bullet like "- " or "• "
+        if line.startswith(("-", "•")):
+            line = line[1:].strip()
 
+        # We only care about lines that look like a table row
+        if "|" not in line:
+            continue
 
-    def run_naive(
-        self,
-        dataset: str,
-        table: str,
-        attributes: List[str],
-        where_clause: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """
-        Ask the LLM directly for rows that satisfy the WHERE clause in one call.
+        parts = [p.strip() for p in line.split("|")]
+        if len(parts) < 4:
+            # Not enough columns, skip
+            continue
 
-        Returns:
-            Dict in the same shape as Galois_* operators:
+        city, country, population, num_hosp = parts[:4]
+
+        rows.append(
             {
-              "result_set": [...],
-              "time": float,
-              "tokens": int,
-              "meta": {...}
+                "name": city,
+                "country": country,
+                "population": population,
+                "num_private_hospitals": num_hosp,
             }
-        """
-        # Reuse our table-scan prompt (single shot, no follow-ups)
-        prompt = PromptTemplates.table_scan_first(
-            dataset=dataset,
-            table=table,
-            attributes=attributes,
-            where_clause=where_clause,
         )
 
-        raw, elapsed, tokens = self._call_llm(prompt)
-        content = self._get_content(raw)
-        parsed = ResponseParser.parse_llm_response(content, elapsed, tokens)
+    # If parsing completely failed, fall back to a single text column
+    if not rows:
+        rows = [{"text": line} for line in text.splitlines() if line.strip()]
 
-        result_set = parsed.get("result_set", [])
+    return rows
 
+
+class NaiveLLMRunner:
+    """Very simple NL baseline – one direct question to the LLM."""
+
+    def __init__(self, llm):
+        self.llm = llm
+
+    def run_eu_cities(self) -> Dict[str, Any]:
+        """
+        Ask the naive NL question and return a dict in the same shape
+        as Galois_* results, so it can be passed into compare_results().
+        """
+        content, elapsed = _call_llm(self.llm, NAIVE_PROMPT)
+        rows = _parse_naive_output(content)
+
+        # We don't have token accounting here; set to 0 for compatibility.
         return {
-            "result_set": result_set,
-            "time": round(elapsed, 3),
-            "tokens": tokens,
+            "result_set": rows,
+            "time": round(elapsed, 2),
+            "tokens": 0,
             "meta": {
-                "strategy": "naive_single_call",
-                "variant": "Naive_LLM",
+                "strategy": "naive_nl",
+                "raw_output": content[:5000],  # truncated raw text, if needed
             },
         }
 
 
-def run_eu_cities() -> Dict[str, Any]:
-    """
-    Run the EU_Cities query both:
-      1) in a naive single LLM call
-      2) through all Galois variants
-
-    and print a small comparison table.
-    """
-    # GaloisRunner will load config + create LLM instance
+def run_eu_cities() -> None:
+    # Use the same config + LLM as the regular Galois runner
     runner = GaloisRunner()
+
+    print("\n==================== Naive vs GALOIS (EU_Cities) ====================\n")
+
+    # 1) Run naive NL baseline
     naive = NaiveLLMRunner(runner.llm)
+    naive_result = naive.run_eu_cities()
 
-    dataset = "WORLD"
-    table = "EU_Cities"
-    attributes = ["name", "country", "population", "num_private_hospitals"]
-    where_clause = "population > 1M AND num_private_hospitals > 15"
-
-    print("Naive vs Galois: EU_CITIES query")
-
-    # 1) Naive single-call baseline
-    print("\nRunning Naive_LLM...")
-    naive_result = naive.run_naive(dataset, table, attributes, where_clause)
-    print(
-        f"   {len(naive_result['result_set'])} rows, "
-        f"{naive_result['tokens']:,} tokens, "
-        f"{naive_result['time']:.2f}s"
-    )
-
-    # 2) Galois variants
+    # 2) Run all Galois variants on the same logical query
     galois_results = runner.run_query(
-        dataset=dataset,
-        table=table,
-        attributes=attributes,
-        where_clause=where_clause,
+        dataset="WORLD",
+        table="EU_Cities",
+        attributes=["name", "country", "population", "num_private_hospitals"],
+        where_clause="population > 1M AND num_private_hospitals > 15",
         variants_to_run=["Galois_WO", "Galois_A", "Galois_S", "Galois_F"],
     )
 
-    # Combine all results into one dict for a joint summary
-    combined: Dict[str, Any] = {"Naive_LLM": naive_result}
-    combined.update(galois_results)
+    # 3) Combine results: add naive baseline as another "variant"
+    combined_results: Dict[str, Any] = {"Naive_NL": naive_result}
+    combined_results.update(galois_results)
 
-    # -------- COMBINED SUMMARY (naive + all Galois) --------
-    print("\n\n=== COMBINED SUMMARY (Naive vs Galois) ===")
+    # 4) Print comparison summary & tables (reusing existing logic)
+    runner.compare_results(combined_results)
 
-    rows = []
-    for variant_name, result in combined.items():
-        if "error" in result:
-            rows.append(
-                {
-                    "Variant": variant_name,
-                    "Rows": "ERROR",
-                    "Tokens": "",
-                    "Time (s)": "",
-                    "Strategy": result["error"][:40]
-                    + ("..." if len(result["error"]) > 40 else ""),
-                }
-            )
-            continue
+    # 5) Optionally save combined results for later analysis
+    from pathlib import Path
+    import json
 
-        rows.append(
-            {
-                "Variant": variant_name,
-                "Rows": len(result.get("result_set", [])),
-                "Tokens": result.get("tokens", 0),
-                "Time (s)": result.get("time", 0.0),
-                "Strategy": result.get("meta", {}).get("strategy", "N/A"),
-            }
-        )
+    out_path = Path("src/test_results/naive_vs_galois_eu_cities.json")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", encoding="utf-8") as f:
+        json.dump(combined_results, f, indent=2, ensure_ascii=False)
+    print(f"\nCombined results saved to: {out_path}")
 
-    df = pd.DataFrame(rows)
-    print(
-        tabulate(
-            df,
-            headers="keys",
-            tablefmt="psql",
-            showindex=False,
-            floatfmt=".2f",
-        )
-    )
-
-    # Optional: reuse the existing pretty printer for Galois-only breakdown
-    print("\n\n=== Galois-only breakdown ===")
-    runner.compare_results(
-        galois_results,
-        extra_results={"Naive_LLM": naive_result},
-    )
-
-    return {"naive": naive_result, "galois": galois_results}
 
 
 if __name__ == "__main__":

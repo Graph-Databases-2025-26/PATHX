@@ -1,4 +1,4 @@
-llm_provider: "azure"       # watsonx | gemini | azure
+llm_provider: "azure"       # watsonx | gemini | azure | azure_llama
 prompt_strategy: "direct"     # direct | zero_shot | few_shot
 
 
@@ -22,6 +22,15 @@ azure:
   deployment: "${AZURE_OPENAI_DEPLOYMENT}"
   api_version: "${AZURE_OPENAI_API_VERSION}"
   model: "${AZURE_OPENAI_DEPLOYMENT}"
+  temperature: 0.0
+  max_tokens: 2048
+
+azure_llama:
+  api_key: "${AZURE_LLAMA_API_KEY}"
+  endpoint: "${AZURE_LLAMA_ENDPOINT}"
+  deployment: "${AZURE_LLAMA_DEPLOYMENT}"
+  api_version: "${AZURE_LLAMA_API_VERSION}"
+  model: "${AZURE_LLAMA_DEPLOYMENT}"
   temperature: 0.0
   max_tokens: 2048
 
