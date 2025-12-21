@@ -9,6 +9,10 @@ from typing import Any, Dict, List, Optional, Set
 from ..operators.base_scan import BaseScanOperator, _filter_new_rows
 from ..prompts.templates import PromptTemplates
 from ..utils.response_parser import ResponseParser
+from ..operators.base_scan import project_rows
+from ..utils.where_columns import extract_where_columns
+from ..utils.post_filter import post_filter_rows_duckdb
+
 
 
 class GaloisWOOperator(BaseScanOperator):
@@ -51,9 +55,14 @@ class GaloisWOOperator(BaseScanOperator):
         total_time = 0.0
         total_tokens = 0
 
+        extended_attrs = attributes
+        if where_clause:
+            where_cols = extract_where_columns(where_clause)
+            extended_attrs = attributes + [c for c in where_cols if c not in attributes]
+
         # Determine keys
         key_attrs = self.key_attributes or [attributes[0]]
-        non_key_attrs = [attr for attr in attributes if attr not in key_attrs]
+        non_key_attrs = [attr for attr in extended_attrs if attr not in key_attrs]
 
         # Step 1: Get ALL keys (no condition pushdown)
         keys_data, keys_time, keys_tokens = self._retrieve_keys(
@@ -97,6 +106,8 @@ class GaloisWOOperator(BaseScanOperator):
         if where_clause:
             all_rows = self._filter_rows(all_rows, where_clause)
 
+        all_rows = project_rows(all_rows, attributes)
+        
         return {
             "result_set": all_rows,
             "time": round(total_time, 3),
@@ -215,12 +226,5 @@ class GaloisWOOperator(BaseScanOperator):
             return None, elapsed, tokens
 
     def _filter_rows(self, rows: List[Dict], where_clause: str) -> List[Dict]:
-        """
-        Apply WHERE clause filtering in memory.
-        
-        Uses WhereEvaluator for complete SQL WHERE evaluation.
-        """
-        from ..utils.where_evaluator import WhereEvaluator
-        
         print(f"Applying WHERE clause post-filter: {where_clause}")
-        return WhereEvaluator.filter_rows(rows, where_clause)
+        return post_filter_rows_duckdb(rows, [where_clause])

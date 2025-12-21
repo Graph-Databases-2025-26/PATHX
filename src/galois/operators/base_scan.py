@@ -13,6 +13,15 @@ from langchain_core.messages import BaseMessage
 Row = Dict[str, Any]
 Table = List[Row]
 
+def project_rows(rows: Table, attributes: List[str]) -> Table:
+    """Project rows to requested attributes, preserving missing as None."""
+    projected: Table = []
+    attr_set = list(attributes)
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        projected.append({a: r.get(a, None) for a in attr_set})
+    return projected
 
 def _make_hashable(value: Any) -> Any:
     """Convert any JSON-like value into a hashable form"""
