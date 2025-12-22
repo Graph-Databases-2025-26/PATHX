@@ -1,157 +1,191 @@
-# PathX: DuckDB and LLM Baselines
+# GALOIS: LLM-Driven Query Processing Framework
+*University of Padua — Graph Databases 2025/26*  
+**Team PATHX:** Juliette Tonneau · Minseok Kim · Bita Khashechian · Danil Smirnov
 
-Baselines and utilities to reproduce the SIGMOD’25 GALOIS results: build DuckDB databases from CSVs, generate ground truth, run deterministic and LLM-backed SQL/NL baselines, export EXPLAIN/ANALYZE plans, and score submissions with the GALOIS metrics.
+This repository contains two major components:
 
-Course: University of Padua — Graph Databases 2025/26  
-Team: Juliette Tonneau · Minseok Kim · Bita Khashechian · Danil Smirnov
+# ** Deterministic Pipelines**  
+Full DuckDB-based pipeline used to reproduce baseline results from the SIGMOD’25 *GALOIS* paper:  
+- build ground truth  
+- ingest CSV datasets  
+- run deterministic SQL baselines  
+- run LLM SQL and NL baselines (WatsonX, Gemini, Azure)  
+- evaluate with GALOIS metrics  
+- export EXPLAIN/ANALYZE plans
 
-## Quick start
-1) Python 3.11+, then:
+# ** GALOIS Engine **  
+A complete and extensible re-implementation of the *GALOIS* LLM query processor (2025):
+
+- Table-Scan (Algorithm 1)  
+- Key-Scan (Algorithm 2)  
+- GALOIS-A (Push-All)  
+- GALOIS-S (Selective Pushdown)  
+- GALOIS-F (Full Optimization: logical + physical)  
+- GALOIS-WO (cell-by-cell worst-case baseline)
+
+This module can execute SQL queries directly via LLM operators, compare algorithms, and produce full cost/time/token analyses.
+
+# Installation
+
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
-2) Create `.env` with provider keys (see Config below).  
-3) Build ground truth:
-```bash
-python scripts/build_ground_truth.py --data-root data --ground-root ground --datasets flight-2 flight-4 fortune geo movies premier presidents world
-```
-4) Ingest datasets and run deterministic SQL:
-```bash
-python -m src.db_interaction.ingest_all --datasets geo movies
-python -m src.db_interaction.run_queries --datasets geo movies
-```
-5) Run LLM baselines:
-```bash
-python -m src.baselines.sql_baseline --datasets geo movies --strategy direct --max-iters 5
-python -m src.baselines.nl_baseline  --datasets geo movies --strategy direct --max-iters 5
-```
-6) Evaluate:
-```bash
-python scripts/galois_eval.py --ground ground --submissions sql_baseline_results --datasets GEO MOVIES --overall --format table
-python scripts/galois_eval.py --ground ground --submissions nl_baseline_results  --datasets GEO MOVIES --overall --format table
-```
 
-## Repository map
-```
-data/                  CSVs + queries_*.sql (and optional queries_*.txt, ingest_*.sql)
-db/                    DuckDB files created locally (per dataset)
-ground/                Ground-truth JSON outputs (query{i}.json)
-results/               explain_json/ and explain_txt/ exports
-submissions/           Deterministic DuckDB query outputs
-sql_baseline_results/  Watsonx SQL baseline outputs (other providers create *_gemini, *_azure)
-nl_baseline_results/   Watsonx NL baseline outputs (other providers create *_gemini, *_azure)
-config/                AppConfig.yaml + config loader
-scripts/               Build ground truth, galois_eval, batch exporters, helpers
-src/
-  baselines/           LLM baselines (chains, prompts, parsing, output writers)
-  db_interaction/      DuckDB ingest/run/explain helpers
-  utils/               logging, dataset helpers, EXPLAIN export
-reports_pathx/         Coursework reports (not used by code)
-requirements.txt
-```
+# Configure LLM Providers
 
-## Config and credentials
-- Main settings live in `config/AppConfig.yaml`. Environment variables are interpolated (`${VAR}`) when the file is loaded.
-- Supported providers: `watsonx`, `gemini`, `azure` (set `llm_provider` in the YAML or override via env `LLM_PROVIDER`).
-- Prompt strategies (SQL and NL): `direct`, `zero_shot`, `few_shot`.
-- `.env` example:
+Create `.env` with your keys:
+
 ```
-# Watsonx
+# WatsonX
 WATSONX_API_KEY=...
-WATSONX_URL=https://us-south.ml.cloud.ibm.com
+WATSONX_URL=...
 WATSONX_PROJECT_ID=...
-WATSONX_MODEL_ID=ibm/granite-3-3-8b-instruct
-WATSONX_TEMPERATURE=0.0
-WATSONX_MAX_NEW_TOKENS=2048
+WATSONX_MODEL_ID=meta/llama-3-3-70b-instruct
 
 # Gemini
 GEMINI_API_KEY=...
 GEMINI_MODEL_NAME="gemini-2.5-flash"
 
 # Azure OpenAI
-AZURE_OPENAI_ENDPOINT=...
 AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_ENDPOINT=...
 AZURE_OPENAI_API_VERSION=2024-10-21
 AZURE_OPENAI_DEPLOYMENT=gpt-4o
 ```
 
-## Data layout and conventions
-- Each dataset lives in `data/<dataset>/` and must include `queries_*.sql`. Optional: `ingest_*.sql` to predefine schema; otherwise CSVs are auto-read.
-- NL questions can be provided via `queries_*.txt` using `--query`-style sections (see `src/utils/dataset_io.py` for parsing).
-- `flight` is split under `data/flight/flight-2` and `data/flight/flight-4`; the tools expose them as `flight-2` and `flight-4`.
+# Repository Structure
 
-## Pipelines and commands
-
-### Ground truth (reference answers)
-Run SQL over CSVs and write `ground/<DATASET>/query{i}.json`:
-```bash
-python scripts/build_ground_truth.py --data-root data --ground-root ground --datasets geo movies
+```
+src/
+├── baselines/
+│   ├── sql_baseline.py
+│   ├── nl_baseline.py
+│   └── prompts/
+│
+├── galois/
+│   ├── core/
+│   ├── operators/
+│   ├── prompts/
+│   ├── runner/
+│   └── README_galois.md
+│
+├── db_interaction/
+├── config/
+├── utils/
+├── scripts/
+└── test
 ```
 
-### DuckDB ingestion
-Create `db/<DATASET>.duckdb` and load tables into schema `target` (runs `ingest*.sql` if present, else CSV autodetect):
+# Part I — Pipelines
+
+### Build ground truth
+```bash
+python -m scripts.build_ground_truth --data-root data --ground-root ground --datasets geo movies
+```
+
+### Ingest datasets
 ```bash
 python -m src.db_interaction.ingest_all --datasets geo movies
 ```
 
-### Deterministic SQL runner
-Execute `queries_*.sql` against DuckDB and store JSON rows under `submissions/<DATASET>/`:
+### Run SQL Baseline
 ```bash
-python -m src.db_interaction.run_queries --datasets geo movies
+python -m src.baselines.sql_baseline --datasets geo movies --strategy direct
 ```
 
-### EXPLAIN / ANALYZE export
-Generate text + JSON plans for every query; outputs under `results/explain_txt/` and `results/explain_json/`:
+### Run NL Baseline
 ```bash
-python -m src.db_interaction.run_explain_all
+python -m src.baselines.nl_baseline --datasets geo movies --strategy direct
+```
+### Evaluate
+```bash
+python -m scripts.galois_eval --ground ground --submissions sql_baseline_results --overall
 ```
 
-### LLM SQL baseline
-- Builds prompt via Jinja2 templates (`src/baselines/prompts/sql/*.j2`) and includes table/schema info from DuckDB.
-- Iterative retrieval with follow-up prompts (`max-iters` controls extra “more rows” turns).
-- Output path is provider-specific, e.g. `sql_baseline_results/WATSONX/GEO/query1.json`.
-```bash
-python -m src.baselines.sql_baseline --datasets geo movies --strategy few_shot --max-iters 5
-```
-
-### LLM NL baseline
-- Reads NL questions from `queries_*.txt` or line-by-line text files.
-- Uses the same schema-aware prompting and iterative runner as the SQL baseline.
-- Output path is provider-specific, e.g. `nl_baseline_results/WATSONX/GEO/query1.json`.
-```bash
-python -m src.baselines.nl_baseline --datasets geo movies --strategy direct --max-iters 5
-```
-
-### Evaluation (GALOIS metrics)
-Compare any submissions folder against ground truth (supports `--cell-metric exact|similarity`, `--tuple-metric exact|similarity`, `--format table|csv|json`):
-```bash
-python scripts/galois_eval.py --ground ground --submissions sql_baseline_results --datasets GEO MOVIES --overall --format table
-```
-
-### Paper comparison helper
-Runs the evaluator for both baselines and prints deltas vs published numbers:
+### Comparison
 ```bash
 python -m src.baselines.compare_results
 ```
 
-### Batch exporter for py-galois (optional)
-Calls a running py-galois server and saves outputs under `submissions/<STUDENT>/<DATASET>/`:
+# Part II — GALOIS LLM Query Engine
+
+Run full GALOIS suite:
+
 ```bash
-python scripts/run_batch_export.py --data-root data --schemas-root schemas --submissions-root submissions --student myname --datasets geo --api-url http://127.0.0.1:8000/query
+python -m src.galois.run_galois \
+  --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 \
+  --variants galois_wo galois_s galois_a galois_f
 ```
 
-## Output folders at a glance
-- `db/<DATASET>.duckdb`        DuckDB snapshot per dataset (schema `target`)
-- `ground/<DATASET>/query*.json`   Reference answers
-- `submissions/<DATASET>/query*.json`   Deterministic DuckDB runs
-- `sql_baseline_results/*/<DATASET>/query*.json`   LLM SQL baseline (provider-specific root)
-- `nl_baseline_results/*/<DATASET>/query*.json`    LLM NL baseline (provider-specific root)
-- `results/explain_{txt,json}/<DATASET>/`          EXPLAIN and EXPLAIN ANALYZE dumps
 
-## Notes
-- Make sure DuckDB files are built (ingest step) before running LLM baselines so schema introspection succeeds.
-- `config/AppConfig.yaml` pulls values from `.env`; missing keys will raise at startup.
-- JSON outputs include `result_set`, elapsed `time`, total `tokens`, and `meta.iterations_used` for iterative runs.
-- Keep provider secrets out of version control; `.env` is gitignored by default.
+Programmatic usage:
+
+```python
+from src.galois.runner.run_galois import GaloisRunner
+runner = GaloisRunner()
+results = runner.run_query(
+    dataset="WORLD",
+    table="EU_Cities",
+    attributes=["name","country","population","num_private_hospitals"],
+    where_clause="population > 1M AND num_private_hospitals > 15"
+)
+runner.compare_results(results)
+runner.save_results(results, "outputs/eu_cities.json")
+```
+
+# GALOIS Algorithms
+
+- **Table-Scan** – retrieve full rows iteratively  
+- **Key-Scan** – retrieve keys then tuples  
+- **GALOIS-A** – push all predicates  
+- **GALOIS-S** – selective pushdown via LLM-estimated selectivity  
+- **GALOIS-F** – full logical + physical optimization  
+- **GALOIS-WO** – cell-by-cell worst case baseline  
+
+---
+
+# Prompt Layer (Jinja2)
+
+Prompts are stored in:
+
+```
+src/galois/prompts/templates/*.j2
+```
+
+Loaded via:
+
+```python
+from jinja2 import Environment, FileSystemLoader
+env = Environment(loader=FileSystemLoader("src/galois/prompts/templates"))
+prompt = env.get_template("table_scan_first.j2").render(...)
+```
+
+---
+
+# Sample Output
+
+```
++-----------+--------+----------+------------+--------------+
+| Variant   | Rows   | Tokens   | Time (s)   | Strategy     |
+|-----------+--------+----------+------------+--------------|
+| Galois_WO | 5      | 11648    | 28.60      | cell_by_cell |
+| Galois_A  | 4      | 597      | 2.98       | table_scan   |
+| Galois_S  | 5      | 848      | 3.58       | table_scan   |
+| Galois_F  | 8      | 4043     | 20.21      | key_scan     |
++-----------+--------+----------+------------+--------------+
+```
+
+---
+
+# Outputs
+
+```
+outputs/
+  galois_results_<dataset>.json
+  comparison_tables/
+```
+
+---
