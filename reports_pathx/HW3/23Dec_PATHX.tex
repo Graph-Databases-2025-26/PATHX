@@ -1,0 +1,468 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\title{PATHX \\ \large Implementation of Galois Features}
+\author{
+    Danil Smirnov \\
+    Bita Khashechian \\
+    Minseok Kim \\
+    Juliette Tonneau
+}
+\date{23 December 2025}
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This report describes a Python implementation of the GALOIS framework for answering SQL queries with large language models (LLMs). The system can build ground–truth answers in DuckDB, execute several GALOIS variants (WO, A, S, F) that interact with the LLM through structured operators, and evaluate the outputs with the same metrics as in the original GALOIS paper: F1--Cell, Cardinality, Tuple–Constraint, and their average.
+
+We first describe the data and ground–truth construction, the prompt templates, and the scan operators that realize the logical LLMScan operator as Table–Scan and Key–Scan. We then present the pushdown optimizer for WHERE clauses and the four GALOIS variants built on top of it. Afterwards we discuss the NL and SQL baselines and the experimental pipeline that runs all components end–to–end. The EU Cities query from the paper is used as a detailed case study, with complete result sets for each variant. Finally, we summarize the numerical results and highlight the main observations about query structure, predicate complexity, and the behaviour of different plans.
+\end{abstract}
+
+\tableofcontents
+
+\section{Introduction}
+
+The original GALOIS paper argues that LLMs should not be treated as black–box text generators that answer full SQL queries in one shot. Instead, the model is used as a logical operator inside a query engine. SQL queries are decomposed into smaller subproblems---such as key enumeration or tuple completion---and the LLM is called iteratively via operators like LLMScan, Table–Scan, and Key–Scan. Predicate pushdown and confidence estimates decide which conditions are enforced in the prompt and which are handled afterwards, mimicking classical database optimizers.
+
+Our work aims to reproduce this design in Python and to align as closely as possible with the experimental methodology of the paper. In earlier stages we implemented NL and SQL baselines and showed that neither natural–language prompting nor plain SQL prompting yields complete and predicate–respecting result sets. Both approaches suffer from missing rows and inconsistent attribute values, especially once queries involve several conditions or attributes. These observations motivate the full GALOIS architecture implemented in the current stage.
+
+The implementation now includes ground–truth construction in DuckDB, prompt templates for all operators, physical implementations of Table–Scan and Key–Scan, a pushdown optimizer based on LLM labels, and four GALOIS variants (WO, A, S, F). On top of that, we provide scripts to run baselines and GALOIS on benchmark datasets, to export EXPLAIN plans, and to compute evaluation metrics. As a running example we replicate the EU Cities query from the paper and use it to compare naive one–shot prompting with structured execution plans.
+
+\section{Data and Ground–Truth Construction}
+
+Ground truth is constructed in \texttt{build\_ground\_truth.py}. The script takes the raw CSV data of each benchmark dataset (such as \texttt{world}, \texttt{movies}, \texttt{flight-2}, \texttt{flight-4}) and converts them into DuckDB tables. Where needed, explicit schemas are defined; for example, the movies dataset requires types for numeric and temporal columns. When CSV file names do not match the table names used in the benchmark queries, the script creates simple views so that the original SQL remains valid.
+
+The benchmark queries are stored in \texttt{queries\_*.sql} files. The script reads each file, removes line comments, and splits it into individual \texttt{SELECT} statements. Every query is executed directly in DuckDB. The resulting table is written as a JSON array of records to
+\[
+  \texttt{ground/}\langle\text{DATASET}\rangle\texttt{/query\textless i\textgreater.json}.
+\]
+These JSON files serve as the gold–standard answers for all later evaluations.
+
+A separate utility module, \texttt{dataset\_io.py}, encapsulates the discovery of datasets and loading of the SQL files. It enumerates dataset directories, reads the queries from their \texttt{queries\_*.sql} files, and also supports loading natural–language questions for the NL baseline when such text files are available.
+
+\section{Baselines}
+
+\subsection{Non–iterative baseline behaviour}
+
+The simplest baseline treats the LLM as a one–shot question–answering system. In the natural–language version, the model receives a textual query describing the task and is asked to answer in tabular JSON form. In the SQL version, it is asked to produce or execute a SQL statement, whose result is then retrieved from DuckDB.
+
+This is extremely cheap and straightforward, but our earlier experiments showed that it rarely produces complete result sets. For queries with multiple conditions or attributes, the model often omits relevant rows or misreads part of the specification. Since the system performs no further checks or retries, these errors remain.
+
+\subsection{Iterative NL and SQL baselines}
+
+To mitigate the incompleteness of one–shot responses, we implemented iterative baselines. The first prompt describes the dataset, table, attributes, and conditions; the LLM returns an initial batch of rows. A follow–up prompt lists the rows already seen and explicitly asks the model to produce new ones without repetition. Newly generated rows are deduplicated and added. This cycle repeats until no new rows appear or a maximum iteration count is reached.
+
+In the NL baseline, all interaction is in natural language; in the SQL baseline, the model refines or extends SQL statements and the resulting queries are executed in DuckDB. Iteration markedly improves recall: the model gradually fills in less obvious entries and moves closer to a full table.
+
+A numerical comparison with the paper's baselines is shown in Tables~\ref{tab:nl} and \ref{tab:sql}. Although the exact values differ because of model choice and prompt details, the trend is similar: iterative SQL prompting outperforms iterative NL prompting, particularly on F1–Cell and Cardinality.
+
+\begin{table}[h]
+\centering
+\label{tab:nl}
+\begin{tabular}{lrrrr}
+\toprule
+Metric & Paper & Ours & $\Delta$ & $\Delta$ (\%) \\
+\midrule
+F1--Cell       & 0.237 & 0.354 & +0.117 & +49.4\% \\
+Cardinality    & 0.462 & 0.505 & +0.043 &  +9.3\% \\
+Tuple Constr.  & 0.065 & 0.159 & +0.094 & +144.6\% \\
+AVG--Score     & 0.254 & 0.339 & +0.085 &  +33.5\% \\
+\#Tokens (M)   & 0.830 & 0.330 & -0.500 & -60.8\% \\
+Avg Time (s)   & 120.0 & 21.25 & -98.75 & -82.3\% \\
+\bottomrule
+\end{tabular}
+\caption{NL baseline comparison between the paper and our implementation.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\label{tab:sql}
+\begin{tabular}{lrrrr}
+\toprule
+Metric & Paper & Ours & $\Delta$ & $\Delta$ (\%) \\
+\midrule
+F1--Cell       & 0.431 & 0.367 & -0.064 & -14.8\% \\
+Cardinality    & 0.659 & 0.611 & -0.048 &  -7.3\% \\
+Tuple Constr.  & 0.351 & 0.243 & -0.108 & -30.8\% \\
+AVG--Score     & 0.481 & 0.407 & -0.074 & -15.4\% \\
+\#Tokens (M)   & 0.330 & 0.210 & -0.120 & -37.0\% \\
+Avg Time (s)   & 61.4  & 11.0 & -50.4 & -82.1\% \\
+\bottomrule
+\end{tabular}
+\caption{SQL baseline comparison between the paper and our implementation.}
+\end{table}
+
+\subsection{Baseline orchestration}
+
+The script \texttt{run\_baselines\_and\_compare.py} orchestrates the NL and SQL baselines. It selects a provider and strategy, runs the baselines on the chosen datasets, and then calls a comparison routine that evaluates their outputs against ground truth using the same metrics later used for GALOIS.
+
+
+\section{Prompt Templates and LLM Interaction}
+
+All prompts used to query the LLM are created via Jinja2 templates and managed by \texttt{templates.py}. Instead of assembling long prompt strings by hand, the code passes structured parameters---dataset name, table name, target attributes, WHERE clause, previously seen rows, and so on---to template functions. These functions return fully instantiated prompts that remain consistent across runs while still being adaptable to each operator and variant.
+
+The most important prompt families are:
+
+\begin{itemize}
+  \item \emph{Table–Scan prompts} ask the LLM to return rows as JSON for a particular table, restricted to a set of attributes and an optional WHERE clause. There is a separate template for the first call and for follow–up calls that list already seen rows.
+  \item \emph{Key–Scan prompts} request only the key attributes (for example a primary key or city name) for rows that satisfy the query. Again there are first and follow–up versions.
+  \item \emph{Tuple–completion prompts} take a key value and ask the LLM for the remaining attributes for that row.
+  \item \emph{Cell–level prompts} ask for a single attribute value for a given key. They are used in the wO variant, where tuples are built cell by cell.
+  \item \emph{Condition–evaluation prompts} present each atomic WHERE condition and ask the LLM to label it as \emph{higher}/\emph{lower} (selectivity mode) or \emph{high}/\emph{low} (confidence mode).
+  \item \emph{Key–confidence prompts} ask the LLM for a scalar in $[0,1]$ that expresses how confident it is that keys can be reliably enumerated for the query.
+\end{itemize}
+
+All templates enforce a strict JSON output format. The abstract base class \texttt{BaseScanOperator} wraps the LLM client and provides a method \texttt{call\_llm()} that sends the prompt, measures wall–clock time, extracts token usage from the response metadata, and returns the raw content. A dedicated response parser extracts and repairs JSON snippets where needed and normalizes them into either a list of row dictionaries, a condition–label map, or a scalar value. Higher–level algorithms therefore work with clean, typed objects rather than free text.
+
+LangChain is used as the execution layer that connects our Python code to the underlying model. Both Table–Scan and Key–Scan use the same client to send the Jinja2–generated prompts and receive outputs. For two–phase retrieval in Key–Scan, LangChain simply executes the two phases as an explicit sequence of calls, which also simplifies logging and time/ token accounting.
+
+\section{LLMScan and Physical Scan Operators}
+
+In the GALOIS paper, LLMScan is a logical operator that retrieves tuples via an LLM. In our system, LLMScan is implemented by two concrete physical operators, both inheriting from \texttt{BaseScanOperator}: a Table–Scan operator and a Key–Scan operator.
+
+\subsection{Common infrastructure}
+
+The abstract \texttt{BaseScanOperator} (defined in \texttt{base\_scan.py}) provides a unified interface for all scan strategies. It implements LLM interaction through \texttt{call\_llm()}, keeps timing and token counters, and includes helper methods to generate deterministic row signatures and filter duplicate rows. This shared infrastructure ensures that different strategies can be compared consistently.
+
+Both Table–Scan and Key–Scan follow an iterative pattern. The first call asks the LLM for an initial set of tuples or key values. Subsequent calls include the rows already retrieved and instruct the LLM not to repeat them. New rows are deduplicated using row signatures before they are added to the result set.
+
+\subsection{Table–Scan}
+
+Table–Scan, implemented in \texttt{table\_scan.py}, directly retrieves full tuples that satisfy the query. The operator receives a dataset, table, attribute list, optional WHERE clause, and maximum number of iterations. At a high level, the procedure is:
+
+\begin{algorithm}[h]
+\caption{Table–Scan}
+\begin{algorithmic}[1]
+\Require dataset, table, attributes, where\_clause, max\_iters
+\State $R \gets \emptyset$ \Comment{collected rows}
+\State $p \gets \text{build\_first\_table\_prompt}(\text{dataset},\text{table},\text{attributes},\text{where\_clause})$
+\State $rows \gets \text{call\_llm}(p)$
+\State $R \gets R \cup rows$
+\For{$i \gets 2$ to $max\_iters$}
+  \State $p \gets \text{build\_followup\_table\_prompt}(\text{dataset},\text{table},\text{attributes},\text{where\_clause},R)$
+  \State $rows \gets \text{call\_llm}(p)$
+  \State $rows \gets rows \setminus R$ \Comment{keep only new rows}
+  \If{$rows = \emptyset$} \State \textbf{break} \EndIf
+  \State $R \gets R \cup rows$
+\EndFor
+\State \Return $R$
+\end{algorithmic}
+\end{algorithm}
+
+The operator returns the final rows together with iteration count, total runtime, token usage, and a flag that indicates that Table–Scan was used. This strategy is relatively cheap in terms of LLM calls because each prompt can return several rows, but for complex queries it may fail to enforce all conditions reliably.
+
+\subsection{Key–Scan}
+
+Key–Scan, implemented in \texttt{key\_scan.py}, splits retrieval into two phases: key discovery and tuple completion. The operator is given a list of attributes and, optionally, explicit key attributes; if no keys are specified, the first attribute is used as the key. The high–level algorithm is:
+
+\begin{algorithm}[h]
+\caption{Key–Scan}
+\begin{algorithmic}[1]
+\Require dataset, table, attributes, key\_attributes, where\_clause, max\_iters
+\State split \textit{attributes} into key attributes $K$ and non–key attributes $A$
+\State $Keys \gets \emptyset$ \Comment{phase 1: key discovery}
+\State $p \gets \text{build\_first\_key\_prompt}(\text{dataset},\text{table},K,\text{where\_clause})$
+\State $new \gets \text{call\_llm}(p)$
+\State $Keys \gets Keys \cup new$
+\For{$i \gets 2$ to $max\_iters$}
+  \State $p \gets \text{build\_followup\_key\_prompt}(\text{dataset},\text{table},K,\text{where\_clause},Keys)$
+  \State $new \gets \text{call\_llm}(p)$
+  \State $new \gets new \setminus Keys$
+  \If{$new = \emptyset$} \State \textbf{break} \EndIf
+  \State $Keys \gets Keys \cup new$
+\EndFor
+\State $R \gets \emptyset$ \Comment{phase 2: tuple completion}
+\ForAll{$k \in Keys$}
+  \State $p \gets \text{build\_tuple\_prompt}(\text{dataset},\text{table},k,A,\text{where\_clause})$
+  \State $vals \gets \text{call\_llm}(p)$
+  \State $row \gets k \cup vals$
+  \State $R \gets R \cup \{row\}$
+\EndFor
+\State \Return $R$
+\end{algorithmic}
+\end{algorithm}
+
+This two–phase strategy generally achieves higher quality tuples because the second–phase prompts are very focused. The drawback is the higher cost: at least one LLM call is needed per key to complete the tuple. In the experiments, time and tokens from both phases are aggregated, and the metadata records how many keys were found and that Key–Scan was used.
+
+\section{Logical Optimization and WHERE–Clause Evaluation}
+
+\subsection{Predicate pushdown}
+
+Logical optimization of the WHERE clause is done in \texttt{pushdown.py}. Its purpose is to decide which conditions should be pushed into the LLM prompt and which should be evaluated locally after the scan.
+
+The optimizer assumes that the WHERE clause is a conjunction of atomic conditions separated by \texttt{AND}. It offers functions to parse the clause into a list of strings, rebuild a clause from a subset of conditions, and finally decide which ones are pushed down. The decision procedure
+\[
+\texttt{determine\_pushdown(conditions, evaluation, mode)}
+\]
+takes the list of conditions, a mapping from conditions to labels, and a mode flag that indicates whether we consider selectivity labels (\emph{higher}/\emph{lower}) or confidence labels (\emph{high}/\emph{low}). It implements exactly the rule described in the GALOIS paper. If $C$ is the set of conditions and $C^\ast$ the subset whose label matches the chosen criterion, then:
+\begin{itemize}
+  \item if $|C^\ast| = 0$, nothing is pushed down;
+  \item if $|C^\ast| = 1$, that single condition is pushed down;
+  \item if $|C^\ast| > 1$, all conditions in $C^\ast$ are pushed and combined with \texttt{AND}.
+\end{itemize}
+Conditions that are not pushed become residual predicates, enforced locally on the rows returned by the scan operator. The labels in the \texttt{evaluation} map are produced by LLM calls using the condition–evaluation prompts.
+
+\subsection{WHERE–clause evaluator}
+
+Our implementation also includes a complete WHERE–clause evaluator used for in–memory filtering, both when conditions are not pushed down and during final post–filtering. It supports comparison operators (\texttt{=}, \texttt{!=}, \texttt{<}, \texttt{<=}, \texttt{>}, \texttt{>=}), logical operators \texttt{AND} and \texttt{OR} with parentheses, and additional constructs such as \texttt{LIKE}, \texttt{IN}, \texttt{IS NULL}, and \texttt{IS NOT NULL}. Unit suffixes like \texttt{K}, \texttt{M}, and \texttt{B} are interpreted as multipliers so that numerical comparisons behave as expected.
+
+This evaluator ensures that, regardless of what the LLM does, the final result respects the original boolean expression in the SQL query.
+
+\section{GALOIS Variants}
+
+The four main GALOIS variants are implemented as separate classes: \texttt{GaloisWO}, \texttt{GaloisA}, \texttt{GaloisS}, and \texttt{GaloisF}. Each takes a dataset, table, list of attributes, and WHERE clause, and returns a result set with metadata. All variants first extend the attribute list to include any columns that appear in the WHERE clause. After the scan operator runs, they reapply the full WHERE clause locally and then project the tuples down to the attributes requested by the original query.
+
+\subsection{GALOIS WO: cell–based retrieval without optimizations}
+
+The WO variant behaves like a cell–level oracle. It first discovers keys using the same key–only iterative process as in Key–Scan, but without pushing the WHERE clause into the LLM. Once a key set is available, the variant fills in each non–key attribute cell by cell, using the cell–value prompt for each (key, attribute) pair.
+
+After all cells have been retrieved, the complete WHERE clause is enforced locally and the tuples are projected to the desired attributes. The number of LLM calls scales with the number of rows times the number of attributes, making this variant deliberately expensive. It serves mainly as an upper bound on what is achievable without logical or physical optimization.
+
+\subsection{GALOIS A: push all conditions}
+
+GALOIS A pushes the entire WHERE clause into Table–Scan. The Table–Scan operator is executed with the full condition string inside the prompt. Afterwards the same clause is applied locally to correct for any mistakes in the LLM output. This variant is cheap in terms of LLM calls but can lose recall when the WHERE clause is complex and the model does not fully enforce every condition in one generation.
+
+\subsection{GALOIS S: selectivity–based pushdown}
+
+GALOIS S mimics a classic database optimizer that uses selectivity estimates. The WHERE clause is parsed into atomic conditions, which are passed to the LLM via the selectivity prompt. The model labels each condition as \emph{higher} or \emph{lower}. The \texttt{determine\_pushdown} function is then applied in selectivity mode to select none, one, or a conjunction of conditions to push down.
+
+Table–Scan is run with this subset of conditions embedded in the prompt. As in the other variants, the full WHERE clause is applied locally afterwards. Metadata records which conditions were deemed more selective and which were actually pushed. In the current code, the degenerate case of a single condition can be handled directly; a minor refinement would be to always send it through the selectivity evaluation for maximal faithfulness to the paper.
+
+\subsection{GALOIS F: full optimization}
+
+GALOIS F combines a logical optimizer using confidence labels with a physical optimizer that chooses between Table–Scan and Key–Scan.
+
+For logical optimization, the WHERE clause is parsed as before and fed to the confidence prompt, which asks the model to label each condition \emph{high} or \emph{low} depending on how confident it is that tuples satisfying the condition can be retrieved. \texttt{determine\_pushdown} is applied in confidence mode to decide the pushed subset.
+
+For physical optimization, the system asks for a key–retrieval confidence $c \in [0,1]$. If the query projects $n$ attributes, the implementation computes
+\[
+\mathrm{conf}(q) = c^{n},
+\]
+in line with the paper's idea of normalizing confidence by query width. This value is compared to a threshold $\tau$ (configurable, default $0.6$). If $\mathrm{conf}(q) \geq \tau$, Key–Scan is chosen; otherwise Table–Scan is used.
+
+The chosen scan operator runs with the pushed conditions. The full WHERE clause is again re–applied locally, and the output is projected to the original attributes. Metadata includes the per–condition confidence labels, the pushed subset, $c$, $\mathrm{conf}(q)$, the threshold $\tau$, and the choice of scan operator.
+
+\section{Experimental Pipeline}
+This section describes the sequence of steps used to run all experiments. The same procedure was followed for every run, beginning with the construction of the ground-truth data, continuing through dataset ingestion and baseline evaluation, and ending with the execution of the GALOIS-inspired query engine
+\subsection{Stages 1 and 2 commands}
+The first stage of the workflow prepares the ground truth. This step processes the raw data files for datasets and produces a reference used in all evaluations. The ground truth was generated by running:
+
+\begin{verbatim}
+python -m scripts.build_ground_truth --data-root data \
+    --ground-root ground --datasets geo movies
+\end{verbatim}
+
+Once the ground truth had been created, the datasets were ingested into database. The ingestion step was executed as:
+
+\begin{verbatim}
+python -m src.db_interaction.ingest_all --datasets geo movies
+\end{verbatim}
+
+After ingestion, the two non-iterative baselines were run. The SQL prompting baseline was executed using:
+
+\begin{verbatim}
+python -m src.baselines.sql_baseline --datasets geo movies \
+    --strategy direct
+\end{verbatim}
+
+and the natural-language prompting baseline was run in the same way, using:
+
+\begin{verbatim}
+python -m src.baselines.nl_baseline --datasets geo movies \
+    --strategy direct
+\end{verbatim}
+
+Both of these baselines rely on an iterative prompting interaction. 
+
+The outputs of the baselines were evaluated against the ground-truth data using the metrics described in the Results section. Evaluation was performed by running:
+
+\begin{verbatim}
+python -m scripts.galois_eval --ground ground \
+    --submissions sql_baseline_results --overall
+\end{verbatim}
+
+and the comparative summary of the two baselines was generated using:
+
+\begin{verbatim}
+python -m src.baselines.compare_results
+\end{verbatim}
+
+\subsection{GALOIS stage commands}
+Following the baseline evaluation, the full GALOIS-inspired query engine was executed. This includes the LLMScan operator, the Filter-LLMScan operator, and the Two-Phase Key-First Retrieval operator. All operator variants were run using:
+
+\begin{verbatim}
+python -m src.galois.run_galois
+\end{verbatim}
+
+In addition to the full run, a direct comparison between the naive single-shot LLM response and the GALOIS execution plan was produced by executing:
+
+\begin{verbatim}
+python -m src.galois.naive_vs_galois
+\end{verbatim}
+
+This comparison illustrates the difference between monolithic prompting and structured, operator-guided execution.
+
+
+\section{Numerical Results}
+
+\subsection{EU Cities Example}
+To provide a concrete end–to–end example aligned with the paper, we reproduce the EU Cities experiment. The table \texttt{EU\_Cities} from the \texttt{WORLD} dataset contains European cities with attributes such as \texttt{name}, \texttt{country}, \texttt{population}, and \texttt{num\_private\_hospitals}.
+
+The target query selects all European cities with more than one million inhabitants and more than fifteen private hospitals. In natural language, the naive baseline question is:
+
+\medskip
+\emph{``What are the population of European cities with more than 1M people and more than fifteen private hospitals?''}
+\medskip
+
+The equivalent SQL used by the baselines and GALOIS variants is:
+\begin{verbatim}
+SELECT name, country, population, num_private_hospitals
+FROM EU_Cities
+WHERE population > 1000000
+  AND num_private_hospitals > 15;
+\end{verbatim}
+
+We run this query with the naive NL baseline and with the four GALOIS variants WO, A, S, and F. All pipelines use the same attribute set and conditions, so differences in quality stem from execution strategy rather than query wording.
+
+Table~\ref{tab:summary_eu} summarizes the runtime, token usage, and number of rows returned by each method.
+
+\begin{table}[h]
+\centering
+\label{tab:summary_eu}
+\begin{tabular}{lrrrr}
+\toprule
+Variant    & Rows & Tokens & Time (s) & Strategy \\
+\midrule
+Naive LLM & 4 &   332 &  2.15 & naive single call \\
+Galois WO & 8 & 17916 & 43.27 & cell–by–cell \\
+Galois A  & 4 &   597 &  4.09 & table–scan \\
+Galois S  & 5 &   848 &  5.70 & table–scan \\
+Galois F  & 9 &  2202 & 14.76 & key–scan \\
+\bottomrule
+\end{tabular}
+\caption{Summary of EU Cities results across variants.}
+\end{table}
+
+\subsubsection{Result sets}
+
+For completeness we report the exact result sets generated by each variant.
+
+\paragraph{Naive NL baseline:}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l l r r}
+\toprule
+name   & country & population & num private hospitals \\
+\midrule
+Berlin & Germany & 3769000 & 20 \\
+Madrid & Spain   & 3223000 & 18 \\
+Rome   & Italy   & 2873000 & 22 \\
+Paris  & France  & 2148000 & 25 \\
+\bottomrule
+\end{tabular}
+\caption{EU Cities result set for the \texttt{Naive\_LLM} variant.}
+\end{table}
+
+The naive baseline captures four major cities that satisfy the constraints but misses several valid entries.
+
+\paragraph{Galois WO:}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l l r r}
+\toprule
+name     & country          & population & num private hospitals \\
+\midrule
+Berlin   & Germany          & 3769000 & 50 \\
+Budapest & Hungary          & 1750000 & 30 \\
+London   & United Kingdom   & 8982000 & 50 \\
+Madrid   & Spain            & 3266000 & 40 \\
+Paris    & France           & 2161000 & 40 \\
+Rome     & Italy            & 2873000 & 50 \\
+\bottomrule
+\end{tabular}
+\caption{EU Cities result set for the \texttt{Galois\_WO} variant.}
+\end{table}
+
+The WO plan reconstructs rows cell by cell for every discovered key. Coverage is wider and includes cities such as Budapest and London that do not appear in the naive baseline. Numerical attributes sometimes show noisy values because each cell is inferred independently.
+
+\paragraph{Galois A:}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l l r r}
+\toprule
+name   & country & population & num private hospitals \\
+\midrule
+Berlin & Germany & 3748000 & 20 \\
+Madrid & Spain   & 3266000 & 18 \\
+Rome   & Italy   & 2873000 & 25 \\
+Paris  & France  & 2148000 & 30 \\
+\bottomrule
+\end{tabular}
+\caption{EU Cities result set for the \texttt{Galois\_A} variant.}
+\end{table}
+
+The A variant uses a table–scan with full pushdown. It returns a narrower and more conservative set of rows than WO; some valid cities disappear when all conditions must be satisfied inside the prompt.
+
+\paragraph{Galois S:}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l l r r}
+\toprule
+name   & country & population & num private hospitals \\
+\midrule
+Berlin   & Germany & 3748000 & 50 \\
+Madrid   & Spain   & 3266000 & 40 \\
+Rome     & Italy   & 2873000 & 35 \\
+Paris    & France  & 2148000 & 60 \\
+Vienna   & Austria & 1900000 & 25 \\
+\bottomrule
+\end{tabular}
+\caption{EU Cities result set for the \texttt{Galois\_S} variant.}
+\end{table}
+
+Here only high–selectivity conditions are pushed down. The result set now includes Vienna as an extra valid city, illustrating how selective pushdown can avoid overly aggressive early filtering.
+
+\paragraph{Galois F:}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l l r r}
+\toprule
+name      & country          & population & num private hospitals \\
+\midrule
+London    & United Kingdom   & 8982000 & 45 \\
+Berlin    & Germany          & 3669491 & 72 \\
+Madrid    & Spain            & 3266126 & 39 \\
+Rome      & Italy            & 2873000 & 45 \\
+Paris     & France           & 2161000 & 39 \\
+Warsaw    & Poland           & 1796058 & 45 \\
+Barcelona & Spain            & 1620343 & 50 \\
+Munich    & Germany          & 1488202 & 45 \\
+Dublin    & Ireland          & 1173179 & 19 \\
+\bottomrule
+\end{tabular}
+\caption{EU Cities result set for the \texttt{Galois\_F} variant.}
+\end{table}
+
+The fully optimized F variant retrieves the largest set of correct tuples among all iterative plans while keeping token usage moderate. It uncovers cities such as Barcelona, Munich, Warsaw, and Dublin that require deeper exploration of the model’s internal knowledge. The combination of confidence–based pushdown and adaptive choice between Key–Scan and Table–Scan appears to be effective.
+
+
+\section{Experiments}
+
+
+\section{Conclusion}
+
+We implemented the main components of the GALOIS framework in Python and evaluated them on benchmark datasets, with a detailed focus on the EU Cities query. The system includes ground–truth construction, Jinja2–based prompt templates, physical implementations of Table–Scan and Key–Scan, a predicate pushdown optimizer, and the four GALOIS variants WO, A, S, and F. NL and SQL baselines provide a reference point for assessing the benefits of structured operator–based execution.
+
+Our experiments confirm the central claim of the GALOIS paper: guiding an LLM with well–designed execution plans substantially improves the completeness and stability of query answers compared to naive prompting. SQL–style prompts already help, but the combination of iterative scanning, selective pushdown, and confidence–based operator choice yields the highest–quality results. Although some details---such as numeric attribute accuracy and single–condition handling in GALOIS S---could be refined further, the system provides an end–to–end realization of GALOIS on modern LLMs and aligns closely with the behaviour reported in the original work.
+
+\end{document}
