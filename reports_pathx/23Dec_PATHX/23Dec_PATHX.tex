@@ -1,0 +1,284 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{hyperref}
+
+\title{Implementation Report for the Galois System}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Overview}
+
+This project is a Python implementation of the \emph{Galois} framework for answering SQL queries using large language models (LLMs). Given a benchmark dataset and a SQL query, the system can:
+
+\begin{itemize}
+  \item build ground-truth answers by executing the query exactly in DuckDB;
+  \item run several Galois variants (wO, A, S, F) that answer the query via LLM interaction;
+  \item evaluate the LLM outputs using the same metrics as in the Galois paper: F1-Cell, Cardinality, Tuple-Constraint, and their average.
+\end{itemize}
+
+The main components are:
+
+\begin{itemize}
+  \item scripts for data preparation, running experiments, and computing metrics;
+  \item scan operators that implement LLMScan in the forms of Table-Scan and Key-Scan;
+  \item a pushdown optimizer for WHERE clauses;
+  \item four Galois variants, corresponding to wO, A, S and F;
+  \item prompt templates for all LLM interactions.
+\end{itemize}
+
+The following sections describe each part and relate it to the design in the Galois paper.
+
+\section{Data and Ground-Truth Construction}
+
+Ground truth is constructed in \texttt{build\_ground\_truth.py}. This script takes the raw CSV data for each benchmark dataset (for example \texttt{world}, \texttt{movies}, \texttt{flight-2}, \texttt{flight-4}) and turns it into a DuckDB database.
+
+For every dataset, the script creates DuckDB tables from the CSV files, with explicit schemas where needed (e.g.\ the \texttt{movies} dataset). When there is a mismatch between CSV filenames and the table names used in the queries, it creates simple view aliases so that the SQL remains consistent with the original benchmark.
+
+The script then reads the benchmark queries from a \texttt{queries\_*.sql} file. Comments are removed and the file is split into individual \texttt{SELECT} statements. Each statement is executed in DuckDB, and the result is written as a JSON array of records to \texttt{ground/<DATASET>/query<i>.json}. These JSON files form the gold-standard answers against which all LLM-based outputs are evaluated.
+
+The module \texttt{dataset\_io.py} provides the basic functionality for discovering datasets and loading their queries. It lists available dataset directories and reads the SQL queries from their corresponding \texttt{queries\_*.sql} files. It also supports loading natural-language queries for the NL baseline when text files are provided.
+
+\section{Prompt Templates and LLM Interaction}
+
+All prompts used to query the LLM are defined via Jinja2 templates in the \texttt{prompts} package and are managed by \texttt{templates.py}. This module exposes higher-level functions that take structured parameters (dataset name, table name, attributes, WHERE clause, previously retrieved rows, and so on) and return fully instantiated prompt strings. The most relevant prompts are:
+
+\begin{itemize}
+  \item \textbf{Table scan prompts} (\texttt{table\_scan\_first}, \texttt{table\_scan\_followup}): ask the LLM to return rows (as JSON) for a given table, restricted to specific attributes and an optional WHERE clause.
+  \item \textbf{Key scan prompts} (\texttt{key\_scan\_first}, \texttt{key\_scan\_followup}): ask the LLM to list only the key attributes for rows that satisfy the query.
+  \item \textbf{Tuple completion prompt} (\texttt{key\_scan\_tuple}): given a specific key value, asks the LLM to provide the remaining attributes for that row.
+  \item \textbf{Cell-level prompt} (\texttt{cell\_value}): given a key and a single attribute name, asks the LLM to return the value for that attribute. This is the building block for the cell-by-cell variant (wO).
+  \item \textbf{Condition evaluation prompts} (\texttt{evaluate\_confidence}, \texttt{evaluate\_selectivity}): present each atomic WHERE condition and ask the LLM to label it as \texttt{"high"}/\texttt{"low} (confidence mode) or \texttt{"higher"}/\texttt{"lower"} (selectivity mode).
+  \item \textbf{Key-confidence prompt} (\texttt{evaluate\_key\_confidence}): asks the LLM for a scalar confidence in $[0,1]$ that it can reliably retrieve keys for the given query.
+\end{itemize}
+
+All templates enforce a strict JSON output format. The actual LLM calls are encapsulated in the base class \texttt{BaseScanOperator}, which wraps an LLM client and provides a helper method \texttt{\_call\_llm}. This method sends the prompt, measures wall-clock time, reads token usage from the response metadata, and returns the raw LLM content together with timing and token counts.
+
+A dedicated response parser extracts the JSON from the LLM outputs, repairs minor formatting issues when needed, and normalizes the content into either a list of tuple dictionaries (for result sets), a condition-to-label map, or a scalar confidence value. This separation allows the higher-level algorithms to work with clean, typed data structures.
+
+\section{LLMScan and Physical Scan Operators}
+
+The Galois paper introduces \emph{LLMScan} as a logical operator that uses an LLM to retrieve tuples. In this implementation, LLMScan is realized by two concrete physical operators:
+
+\begin{itemize}
+  \item \texttt{TableScanOperator}, which directly retrieves full tuples;
+  \item \texttt{KeyScanOperator}, which first retrieves keys and then completes the tuples.
+\end{itemize}
+
+Both operators inherit from \texttt{BaseScanOperator}. They share an iterative pattern:
+
+\begin{itemize}
+  \item the first LLM call asks for an initial set of tuples or key values;
+  \item subsequent calls are made with the previously retrieved results in the prompt, requesting additional, non-overlapping results;
+  \item duplicates are detected via a simple signature function applied to each row.
+\end{itemize}
+
+\subsection{Table-Scan}
+
+Table-Scan is implemented in \texttt{table\_scan.py}. Conceptually, it directly retrieves rows that satisfy the query. The operator takes as input a dataset, a table, a list of attributes, an optional WHERE clause, and a limit on the number of iterations.
+
+The high-level procedure for Table-Scan follows the design in the Galois paper and can be written as:
+
+\begin{algorithm}[h]
+\caption{Table-Scan}
+\begin{algorithmic}[1]
+\Require dataset, table, attributes, where\_clause, max\_iters
+\State $R \gets \emptyset$ \Comment{collected rows}
+\State $p \gets \text{build\_first\_table\_prompt}(\text{dataset}, \text{table}, \text{attributes}, \text{where\_clause})$
+\State $rows \gets \text{call\_LLM}(p)$
+\State $R \gets R \cup rows$
+\For{$i \gets 2$ to $max\_iters$}
+  \State $p \gets \text{build\_followup\_table\_prompt}(\text{dataset}, \text{table}, \text{attributes}, \text{where\_clause}, R)$
+  \State $rows \gets \text{call\_LLM}(p)$
+  \State $rows \gets rows \setminus R$ \Comment{keep only new rows}
+  \If{$rows = \emptyset$}
+    \State \textbf{break}
+  \EndIf
+  \State $R \gets R \cup rows$
+\EndFor
+\State \Return $R$
+\end{algorithmic}
+\end{algorithm}
+
+The implementation returns these rows, the number of iterations used, the total response time and token count, and a metadata field identifying the strategy as Table-Scan.
+
+\subsection{Key-Scan}
+
+Key-Scan is implemented in \texttt{key\_scan.py}. It splits the retrieval into a key discovery phase and a tuple completion phase. The operator is given a set of attributes and, optionally, an explicit set of key attributes. If key attributes are not specified, the first attribute is used as the key by default.
+
+The high-level algorithm is:
+
+\begin{algorithm}[h]
+\caption{Key-Scan}
+\begin{algorithmic}[1]
+\Require dataset, table, attributes, key\_attributes, where\_clause, max\_iters
+\State Split $\text{attributes}$ into key attributes $K$ and non-key attributes $A$
+\State $Keys \gets \emptyset$
+\Comment{Phase 1: key discovery}
+\State $p \gets \text{build\_first\_key\_prompt}(\text{dataset}, \text{table}, K, \text{where\_clause})$
+\State $new \gets \text{call\_LLM}(p)$
+\State $Keys \gets Keys \cup new$
+\For{$i \gets 2$ to $max\_iters$}
+  \State $p \gets \text{build\_followup\_key\_prompt}(\text{dataset}, \text{table}, K, \text{where\_clause}, Keys)$
+  \State $new \gets \text{call\_LLM}(p)$
+  \State $new \gets new \setminus Keys$
+  \If{$new = \emptyset$}
+    \State \textbf{break}
+  \EndIf
+  \State $Keys \gets Keys \cup new$
+\EndFor
+\Comment{Phase 2: tuple completion}
+\State $R \gets \emptyset$
+\ForAll{$k \in Keys$}
+  \State $p \gets \text{build\_tuple\_prompt}(\text{dataset}, \text{table}, k, A, \text{where\_clause})$
+  \State $vals \gets \text{call\_LLM}(p)$
+  \State $row \gets k \cup vals$
+  \State $R \gets R \cup \{row\}$
+\EndFor
+\State \Return $R$
+\end{algorithmic}
+\end{algorithm}
+
+Time and token usage from both phases are aggregated. The metadata records the number of keys discovered and the fact that the strategy used was Key-Scan.
+
+\section{Logical Optimization: Predicate Pushdown}
+
+Logical optimization of the WHERE clause is handled in \texttt{pushdown.py}. The goal is to decide which conditions should be pushed into the LLM prompt (so that the LLM attempts to enforce them directly) and which conditions should be deferred and enforced locally on the retrieved rows.
+
+The optimizer assumes that the WHERE clause is a conjunction of atomic conditions separated by \texttt{AND}. It provides:
+
+\begin{itemize}
+  \item a function that parses the WHERE clause into a list of condition strings;
+  \item a function that rebuilds a WHERE clause from a subset of these conditions;
+  \item a decision function
+  \[
+    \texttt{determine\_pushdown(conditions, evaluation, mode)}
+  \]
+  that decides which conditions to push down.
+\end{itemize}
+
+The \texttt{evaluation} argument is a map from condition strings to labels, derived from LLM calls:
+
+\begin{itemize}
+  \item in selectivity mode (\texttt{mode = "selectivity"}), labels are \texttt{"higher"} or \texttt{"lower"};
+  \item in confidence mode (\texttt{mode = "confidence"}), labels are \texttt{"high"} or \texttt{"low"}.
+\end{itemize}
+
+The rule used is the one described in the Galois paper. Let $C$ be the set of conditions and $C^\ast$ the subset of conditions whose label matches the chosen criterion (\texttt{"higher"} or \texttt{"high"}):
+
+\begin{itemize}
+  \item if $|C^\ast| = 0$, no condition is pushed down;
+  \item if $|C^\ast| = 1$, that single condition is pushed down;
+  \item if $|C^\ast| > 1$, all conditions in $C^\ast$ are pushed down, combined with \texttt{AND}.
+\end{itemize}
+
+Conditions that are not pushed down remain as residual predicates, and are applied afterwards as a filter on the result of the scan operator.
+
+The labels in \texttt{evaluation} are produced by calls to the LLM using the \texttt{evaluate\_selectivity} or \texttt{evaluate\_confidence} prompts.
+
+\section{Galois Variants: wO, A, S, F}
+
+The four Galois variants described in the paper are implemented in separate classes: \texttt{GaloisWO}, \texttt{GaloisA}, \texttt{GaloisS} and \texttt{GaloisF}. Each variant takes a dataset, table, list of attributes and a WHERE clause, and returns a result set together with metadata.
+
+All variants first ensure that any columns appearing in the WHERE clause are included in the working attribute list. After applying their strategy to retrieve rows via the LLM (using Table-Scan, Key-Scan or cell-based retrieval), they always apply the full WHERE clause locally as a final filter and then project the tuples back to the attributes requested by the original query.
+
+\subsection{Galois wO}
+
+\texttt{GaloisWO} implements the ``without optimizations'' variant. It behaves like a cell-level LLM oracle.
+
+The variant first discovers keys using the same key-only iterative process as in Key-Scan, but without pushing the WHERE clause to the LLM. Once a set of keys is obtained, it fills in non-key attributes cell by cell: for each key and each remaining attribute, it uses the \texttt{cell\_value} prompt to query the LLM for a single value.
+
+After all cells have been completed, the full WHERE clause is applied as a local filter. Finally, the tuples are projected back to the attributes required by the query. The number of LLM calls is proportional to the number of returned rows times the number of attributes, which makes this variant intentionally expensive. It serves as a reference implementation of a naïve ``LLM-as-cell-oracle'' approach.
+
+\subsection{Galois A}
+
+\texttt{GaloisA} implements Galois A. It pushes the entire WHERE clause into Table-Scan without distinguishing among conditions.
+
+The variant runs \texttt{TableScanOperator} with the full WHERE clause in the prompt. After the LLMScan, the same WHERE clause is re-applied locally to ensure that conditions are respected, even if the LLM output is imperfect. Projection is then applied to restrict the output to the original attributes. The metadata reflects that all conditions were pushed down.
+
+This variant is relatively cheap in terms of LLM calls, but can lose recall when the WHERE clause is complex or the model has difficulty enforcing every condition in one shot.
+
+\subsection{Galois S}
+
+\texttt{GaloisS} implements the selectivity-based variant. It is meant to mimic a traditional database optimizer that uses selectivity estimates to decide which conditions to push down.
+
+The WHERE clause is parsed into atomic conditions. These conditions are passed to the LLM via the \texttt{evaluate\_selectivity} prompt, which asks the model to label each as \texttt{"higher"} or \texttt{"lower"} according to how selective it expects the condition to be. The resulting map is then fed into \texttt{determine\_pushdown} in selectivity mode. This yields either no pushed condition, one pushed condition, or a conjunction of several pushed conditions.
+
+Table-Scan is executed with this pushed subset. After LLMScan, the full WHERE clause is applied locally as an additional filter. The metadata records which conditions were evaluated as \texttt{"higher"} and which ones were actually pushed into the LLM prompt.
+
+In the current implementation, the single-condition case is treated as a special case and the condition is pushed without an explicit call to the selectivity prompt. This can be easily changed if a strict adherence to the original description is required.
+
+\subsection{Galois F}
+
+\texttt{GaloisF} is the full Galois variant. It combines a confidence-based logical optimizer with a confidence-based physical optimizer that chooses between Table-Scan and Key-Scan.
+
+First, the WHERE clause is parsed into atomic conditions. For logical optimization, these conditions are given to the LLM via the \texttt{evaluate\_confidence} prompt, which labels each condition as \texttt{"high"} or \texttt{"low"} according to the model's confidence that it can retrieve tuples satisfying that condition. The \texttt{determine\_pushdown} function is then applied in confidence mode to decide which conditions, if any, should be embedded into the LLM prompt.
+
+Second, for physical optimization, the system estimates a key-retrieval confidence. The \texttt{evaluate\_key\_confidence} prompt asks the LLM to return a scalar $c \in [0,1]$ representing its confidence that it can reliably enumerate key values for the query. If the query projects $n$ attributes, the implementation computes
+\[
+\mathrm{conf}(q) = c^{n},
+\]
+following the idea in the paper of normalizing confidence by the query width. This $\mathrm{conf}(q)$ is compared to a threshold $\tau$ (configurable, default $0.6$ which is going to be dynamic in experiments section). If $\mathrm{conf}(q) \ge \tau$, Key-Scan is chosen; otherwise Table-Scan is selected.
+
+The chosen scan operator is then executed with the pushed conditions. As in the other variants, the full WHERE clause is applied locally afterwards and the tuples are projected down to the requested attributes. Metadata includes the per-condition confidence labels, the pushed conditions, the key confidence, the adjusted confidence $\mathrm{conf}(q)$, the threshold $\tau$, and which scan operator was chosen.
+
+\section{Baselines and Experimental Pipeline}
+
+\subsection{NL and SQL baselines}
+
+The script \texttt{run\_baselines\_and\_compare.py} orchestrates the main baselines:
+
+\begin{itemize}
+  \item an NL baseline, which takes natural-language questions and asks the LLM to answer them directly;
+  \item a SQL baseline, which takes SQL queries and asks the LLM to generate or execute SQL, then runs that SQL on the database.
+\end{itemize}
+
+It allows selecting the provider and strategy for each baseline and then calls a comparison module that evaluates their outputs against the ground truth using the same metrics that are used for Galois.
+
+\subsection{Running Galois and exporting results}
+
+The script \texttt{run\_all.py} provides an end-to-end pipeline for running Galois:
+
+\begin{itemize}
+  \item build ground truth (unless explicitly skipped);
+  \item ingest the datasets into DuckDB;
+  \item run the Galois query pipeline on a chosen set of datasets;
+  \item export EXPLAIN and EXPLAIN ANALYZE plans for each SQL query using DuckDB;
+  \item evaluate the LLM-based results against the ground truth.
+\end{itemize}
+
+Additional runs can be performed using \texttt{run\_batch\_export.py}, which sends POST requests to a \texttt{/query} endpoint implemented by a FastAPI server. For each query, the request includes a path to a schema description, the name of the LLM provider, the confidence threshold $\tau$, and the maximum number of iterations for LLMScan. The response contains the result rows and a metadata object with token counts and latency. Each query's outputs are stored as \texttt{query<i>.json} and \texttt{query<i>.meta.json}.
+
+\subsection{Metric computation and numerical results}
+
+The script \texttt{galois\_eval.py} computes the evaluation metrics used in the Galois paper. For each dataset and each method (NL, SQL, Galois wO/A/S/F), it compares the predicted results with the ground-truth JSONs and calculates:
+
+\begin{itemize}
+  \item \textbf{F1-Cell}: a cell-level F1 score, computed either with exact equality or with a similarity notion (numeric values within $\pm 10\%$; strings equal up to small edit distance);
+  \item \textbf{Cardinality}: the ratio of the smaller to the larger of the predicted and true row counts;
+  \item \textbf{Tuple-Constraint}: a measure of how well entire tuples are reproduced, optionally using the same similarity notion as for F1-Cell;
+  \item \textbf{AVG}: the arithmetic mean of F1-Cell, Cardinality and Tuple-Constraint.
+\end{itemize}
+
+When meta-information is present, the evaluator also aggregates total and average token usage and response time. The script can output results in multiple formats (console table, CSV, JSON, LaTeX), and includes hard-coded reference values from the Galois paper so that the current run can be directly compared with the published numbers.
+
+\section{Notes and Limitations}
+
+The implementation captures the main ideas of the Galois framework:
+
+\begin{itemize}
+  \item iterative LLM-based scanning via Table-Scan and Key-Scan;
+  \item a cell-based wO variant;
+  \item predicate pushdown based on selectivity or confidence labels from the LLM;
+  \item physical choice between Table-Scan and Key-Scan based on key-retrieval confidence;
+  \item an evaluation pipeline aligned with the Galois metrics and experimental setup.
+\end{itemize}
+
+One minor point where the code can be made closer to the text of the paper is the handling of a WHERE clause with a single condition in Galois~S. At present, that condition is always pushed down without querying the LLM for a selectivity label. This is easy to adjust by routing also the single-condition case through the selectivity evaluation and \texttt{determine\_pushdown}. Apart from such details, the system provides an end-to-end realization of the Galois approach, from data preparation through LLM-based query answering to metric computation and comparison with reference results.
+
+\end{document}
