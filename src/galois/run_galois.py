@@ -341,8 +341,8 @@ def save_galois_result_json(
       galois_s/<DATASET>/query1.json
       galois_f/<DATASET>/query1.json
     """
-    variant_folder = variant.lower().removeprefix("results_")
-    out_dir = Path(variant_folder) / dataset
+    variant_folder = "results_" + variant.lower()
+    out_dir = Path(variant_folder) / dataset.upper()
     out_dir.mkdir(parents=True, exist_ok=True)
 
     out_path = out_dir / f"query{query_idx}.json"
