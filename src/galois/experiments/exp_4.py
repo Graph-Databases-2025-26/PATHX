@@ -1,225 +1,281 @@
-from __future__ import annotations
-
-import json
-import sys
-from pathlib import Path
-from typing import Any, Dict, Iterable, List, Tuple
-
-from src.config.constants import DATA_DIR, GROUND_PATH
+import re
 import pandas as pd
+import json
+import os
+import glob
+import sys
+from src.utils import LOG
+from src.utils.constants import GROUND_PATH, DATA_DIR
+
+# --- PATH SETUP ---
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, '../../../../'))
+EVAL_DIR = os.path.join(PROJECT_ROOT, 'src', 'utils', 'tutor')
+
+if EVAL_DIR not in sys.path:
+    sys.path.append(EVAL_DIR)
+
+sys.path.append(SCRIPT_DIR)
+
+try:
+    from galois_eval import (
+        _parse_table_from_obj,
+        f1_cell_similarity,
+        cardinality,
+        tuple_constraint
+    )
+except ImportError:
+    LOG.error(f"CRITICAL ERROR: Cannot find `galois_eval.py` in: {SCRIPT_DIR}.")
+    sys.exit(1)
+
+# Paths
+PRESIDENTS_DIR = os.path.join(DATA_DIR, "PRESIDENTS")
+QUERIES_PATH = os.path.join(PRESIDENTS_DIR, "queries_presidents.sql")
+GALOIS_RESULTS_DIR = os.path.join(DATA_DIR, ".galois_output")
+BASELINE_RESULTS_DIR = os.path.join(DATA_DIR, ".output")
 
 
-SCRIPTS_DIR = DATA_DIR.parent / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
+# --- LOGIC ---
 
-from galois_eval import (  # noqa: E402
-    _parse_table_from_obj,
-    cardinality,
-    f1_cell_similarity,
-    tuple_constraint,
-)
+def categorize_query_id(q_id):
+    """
+    Map query id to (Country, Time) category.
 
+    Time categories (as in the Galois paper experiment 4):
+        - 'Recent'
+        - 'Past'
+        - 'All-Time'
+    Countries:
+        - 'USA'
+        - 'UK'
+        - 'France'
+    """
+    # Example mapping based on query id ranges.
+    # Adjust if your query IDs differ, but this matches the original reference implementation.
 
-SKIP_BASELINE_METHODS = {
-    "__pycache__",
-    "_tmp",
-    "archive",
-    "tmp",
-}
+    if 1 <= q_id <= 10:
+        country = "USA"
+        time = "All-Time"
+    elif 11 <= q_id <= 20:
+        country = "USA"
+        time = "Recent"
+    elif 21 <= q_id <= 30:
+        country = "USA"
+        time = "Past"
+    elif 31 <= q_id <= 40:
+        country = "UK"
+        time = "All-Time"
+    elif 41 <= q_id <= 50:
+        country = "UK"
+        time = "Recent"
+    elif 51 <= q_id <= 60:
+        country = "UK"
+        time = "Past"
+    elif 61 <= q_id <= 70:
+        country = "France"
+        time = "All-Time"
+    elif 71 <= q_id <= 80:
+        country = "France"
+        time = "Recent"
+    elif 81 <= q_id <= 90:
+        country = "France"
+        time = "Past"
+    else:
+        country = "Unknown"
+        time = "Unknown"
 
-
-def _read_queries(sql_path: Path) -> List[str]:
-    lines = sql_path.read_text(encoding="utf-8").splitlines()
-    cleaned = [line for line in lines if not line.strip().startswith("--")]
-    joined = "\n".join(cleaned)
-    queries = [q.strip() for q in joined.split(";") if q.strip()]
-    return queries
-
-
-def categorize_query_id(q_id: int) -> Tuple[str, str]:
-    vz_recent = {8, 10, 13}
-    vz_past = {11, 12}
-    vz_all = {1, 2, 3, 4, 5, 6, 7, 9}
-
-    usa_recent = {18, 21, 24, 26}
-    usa_past = {23, 25}
-    usa_all = {14, 15, 16, 17, 19, 20, 22}
-
-    if q_id in vz_recent:
-        return "Venezuela", "Recent"
-    if q_id in vz_past:
-        return "Venezuela", "Past"
-    if q_id in vz_all:
-        return "Venezuela", "All-Time"
-    if q_id in usa_recent:
-        return "USA", "Recent"
-    if q_id in usa_past:
-        return "USA", "Past"
-    if q_id in usa_all:
-        return "USA", "All-Time"
-    raise ValueError(f"Uncategorized query id: {q_id}")
-
-
-def _normalize_key(key: str) -> str:
-    return key.split(".")[-1].lower()
+    return country, time
 
 
-def _normalize_row_keys(row: Dict[str, Any]) -> Dict[str, Any]:
-    return {_normalize_key(k): v for k, v in row.items()}
+def load_queries_map(file_path):
+    q_map = {}
+    idx = 1
+    if not os.path.exists(file_path):
+        LOG.warning(f"Query file not found at {file_path}")
+        return {}
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        content = f.read().strip()
+        for q in content.split(";"):
+            if q.strip():
+                lines = q.strip().split('\n')
+                clean_sql = '\n'.join([l for l in lines if not l.strip().startswith('--')]).strip()
+                if clean_sql:
+                    q_map[idx] = clean_sql
+                    idx += 1
+    return q_map
 
 
-def _normalize_table_obj(obj: Any) -> Any:
-    if isinstance(obj, dict) and "rows" in obj:
-        rows = obj.get("rows")
-        if isinstance(rows, list) and rows and isinstance(rows[0], dict):
-            new_obj = dict(obj)
-            new_obj["rows"] = [_normalize_row_keys(r) for r in rows]
-            return new_obj
-    if isinstance(obj, list) and obj and isinstance(obj[0], dict):
-        return [_normalize_row_keys(r) for r in obj]
-    return obj
+def discover_result_folders():
+    found_folders = []
+
+    # 1. Search GALOIS
+    if os.path.exists(GALOIS_RESULTS_DIR):
+        for version in os.listdir(GALOIS_RESULTS_DIR):
+            if "EXP5" in version.upper():
+                continue
+            target_path = os.path.join(GALOIS_RESULTS_DIR, version, "PRESIDENTS")
+            if os.path.isdir(target_path):
+                if glob.glob(os.path.join(target_path, "query*.json")):
+                    found_folders.append((version.upper(), target_path))
+
+    # 2. Search BASELINES
+    if os.path.exists(BASELINE_RESULTS_DIR):
+        for version_folder in os.listdir(BASELINE_RESULTS_DIR):
+            if version_folder in ['PRESIDENTS', 'FLIGHT', 'GEO']:
+                continue
+            target_path = os.path.join(BASELINE_RESULTS_DIR, version_folder, "watsonx", "PRESIDENTS")
+            if os.path.isdir(target_path):
+                if glob.glob(os.path.join(target_path, "query*.json")):
+                    method_name = version_folder.replace(".", "").replace("_output", "").upper()
+                    found_folders.append((method_name, target_path))
+
+    return found_folders
 
 
-def _extract_table_obj(obj: Any) -> Any:
-    if isinstance(obj, dict) and "result_set" in obj:
-        obj = obj["result_set"]
-    if isinstance(obj, dict) and "tuples" in obj:
-        return obj["tuples"]
-    if isinstance(obj, list):
-        return obj
-    return obj
-
-
-def _load_json(path: Path) -> Any:
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _load_table(path: Path) -> Tuple[List[str], List[List[Any]]]:
-    if not path.exists():
-        return [], []
-    obj = _load_json(path)
-    table_obj = _extract_table_obj(obj)
-    table_obj = _normalize_table_obj(table_obj)
-    return _parse_table_from_obj(table_obj)
-
-
-def _collect_galois_methods() -> Dict[str, Path]:
-    out: Dict[str, Path] = {}
-    root = DATA_DIR / ".galois_output"
-    if not root.exists():
-        return out
-    for method_dir in root.iterdir():
-        if not method_dir.is_dir():
+def normalize_data_keys(data_list):
+    if not data_list:
+        return []
+    normalized = []
+    for row in data_list:
+        if not isinstance(row, dict):
+            normalized.append(row)
             continue
-        ds_dir = method_dir / "PRESIDENTS"
-        if ds_dir.exists():
-            out[method_dir.name] = ds_dir
-    return out
+        new_row = {}
+        for k, v in row.items():
+            clean_key = k.split('.')[-1].lower()
+            new_row[clean_key] = v
+        normalized.append(new_row)
+    return normalized
 
 
-def _collect_baseline_methods() -> Dict[str, Path]:
-    out: Dict[str, Path] = {}
-    root = DATA_DIR / ".output"
-    if not root.exists():
-        return out
-    for method_dir in root.iterdir():
-        if not method_dir.is_dir():
+def calculate_metrics_row(gt_data, pred_data):
+    gt_clean = normalize_data_keys(gt_data)
+    pred_clean = normalize_data_keys(pred_data)
+
+    gt_cols, gt_rows = _parse_table_from_obj(gt_clean)
+    pr_cols, pr_rows = _parse_table_from_obj(pred_clean)
+
+    f1 = f1_cell_similarity(gt_cols, gt_rows, pr_cols, pr_rows)
+    card = cardinality(gt_rows, pr_rows)
+    tcon = tuple_constraint(gt_rows, pr_rows)
+
+    avg = (f1 + card + tcon) / 3.0
+    return avg, card
+
+
+def load_ground_truth(q_id):
+    gt_file = os.path.join(GROUND_PATH, "PRESIDENTS", f"query{q_id}.json")
+    if not os.path.exists(gt_file):
+        return []
+    try:
+        with open(gt_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            return data
+        return data.get("result_set", data.get("tuples", []))
+    except Exception as e:
+        LOG.error(f"Error loading GT {gt_file}: {e}")
+        return []
+
+
+def load_results_from_folder(folder_path):
+    results_map = {}
+    if not os.path.exists(folder_path):
+        return results_map
+
+    for filename in os.listdir(folder_path):
+        file_path = os.path.join(folder_path, filename)
+        if os.path.isdir(file_path):
             continue
-        name = method_dir.name
-        if name.startswith(".") or name in SKIP_BASELINE_METHODS:
+
+        if not filename.lower().endswith(".json") or not filename.lower().startswith("query"):
             continue
-        ds_dir = method_dir / "watsonx" / "PRESIDENTS"
-        if ds_dir.exists():
-            out[name] = ds_dir
-    return out
+
+        match = re.search(r'query(\d+)\.json', filename)
+        if not match:
+            continue
+        q_id = int(match.group(1))
+
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            res = data.get("result_set", data.get("tuples", []))
+            results_map[q_id] = res
+        except Exception as e:
+            LOG.error(f"Error loading result {file_path}: {e}")
+            continue
+
+    return results_map
 
 
-def _print_table_6_replication(rows: List[Dict[str, Any]]) -> None:
-    print("TABLE 6 REPLICATION")
-    if not rows:
-        print("No results found.")
+def exp_4():
+    if not os.path.exists(GROUND_PATH):
+        LOG.error("CRITICAL ERROR: Ground Truth folder not found!")
         return
 
-    stats: Dict[Tuple[str, str], List[float]] = {}
-    methods = sorted({r["Method"] for r in rows})
-    countries_seen = {r["Country"] for r in rows}
-    country_order = ["Venezuela", "USA"]
-    countries = [c for c in country_order if c in countries_seen]
-    countries.extend(sorted(c for c in countries_seen if c not in countries))
+    sql_map = load_queries_map(QUERIES_PATH)
+    experiments = discover_result_folders()
 
-    for r in rows:
-        key = (r["Method"], r["Country"])
-        stats.setdefault(key, []).append(r["AVG_SCORE"])
+    if not experiments:
+        LOG.warning("No results found.")
+        return
 
-    headers = ["Method"] + countries
-    table_rows: List[List[str]] = []
-    for method in methods:
-        row = [method]
-        for country in countries:
-            values = stats.get((method, country), [])
-            mean_val = sum(values) / len(values) if values else None
-            row.append(f"{mean_val:.3f}" if mean_val is not None else "")
-        table_rows.append(row)
+    all_metrics = []
 
-    widths = [len(h) for h in headers]
-    for r in table_rows:
-        for i, cell in enumerate(r):
-            widths[i] = max(widths[i], len(cell))
+    for method_name, folder_path in experiments:
+        results_map = load_results_from_folder(folder_path)
+        if not results_map:
+            LOG.warning(f"No results for {method_name}")
+            continue
 
-    def line() -> None:
-        print("+" + "+".join("-" * (w + 2) for w in widths) + "+")
-
-    def row(cells: Iterable[str]) -> None:
-        print("| " + " | ".join(c.ljust(widths[i]) for i, c in enumerate(cells)) + " |")
-
-    line()
-    row(headers)
-    line()
-    for r in table_rows:
-        row(r)
-    line()
-
-
-def main() -> None:
-    sql_path = DATA_DIR / "PRESIDENTS" / "queries_presidents.sql"
-    queries = _read_queries(sql_path)
-    q_ids = list(range(1, len(queries) + 1))
-
-    methods: Dict[str, Path] = {}
-    methods.update(_collect_galois_methods())
-    methods.update(_collect_baseline_methods())
-
-    rows: List[Dict[str, Any]] = []
-    for method, method_dir in sorted(methods.items()):
-        for q_id in q_ids:
-            gt_path = GROUND_PATH / "PRESIDENTS" / f"query{q_id}.json"
-            pr_path = method_dir / f"query{q_id}.json"
-            if not gt_path.exists():
+        for q_id, sql in sql_map.items():
+            if q_id not in results_map:
                 continue
 
-            gt_cols, gt_rows = _load_table(gt_path)
-            pr_cols, pr_rows = _load_table(pr_path)
+            gt_data = load_ground_truth(q_id)
+            pred_data = results_map[q_id]
 
-            f1 = f1_cell_similarity(gt_cols, gt_rows, pr_cols, pr_rows)
-            card = cardinality(gt_rows, pr_rows)
-            tcon = tuple_constraint(gt_rows, pr_rows)
-            avg = (f1 + card + tcon) / 3.0
+            avg, card = calculate_metrics_row(gt_data, pred_data)
+            country, time_cat = categorize_query_id(q_id)
 
-            country, time_label = categorize_query_id(q_id)
-            rows.append(
-                {
-                    "Method": method,
-                    "Country": country,
-                    "Time": time_label,
-                    "AVG_SCORE": avg,
-                    "Cardinality": card,
-                }
-            )
+            all_metrics.append({
+                'Method': method_name,
+                'Country': country,
+                'Time': time_cat,
+                'AVG_SCORE': avg,
+                'Cardinality': card
+            })
 
-    _print_table_6_replication(rows)
+    if not all_metrics:
+        LOG.warning("No metrics calculated.")
+        return
 
+    df = pd.DataFrame(all_metrics)
+
+    # TABLE 6 replication (grouped by Country + Time)
+    print("\n" + "=" * 60)
+    print("TABLE 6 REPLICATION")
+    print("=" * 60)
+    try:
+        t6 = df.groupby(['Method', 'Country', 'Time'])['AVG_SCORE'].mean().unstack(level=0)
+        # Optional reordering, depending on available methods
+        print(t6)
+    except Exception as e:
+        print(f"Error producing Table 6: {e}")
+
+    # TABLE 7 replication (grouped only by Time)
+    print("\n" + "=" * 60)
+    print("TABLE 7 REPLICATION")
+    print("=" * 60)
+    try:
+        t7 = df.groupby(['Method', 'Time'])['AVG_SCORE'].mean().unstack(level=0)
+        sorter = ['Recent', 'Past', 'All-Time']
+        available = [s for s in sorter if s in t7.index]
+        print(t7.reindex(available))
+    except Exception as e:
+        print(f"Error producing Table 7: {e}")
 
 
 if __name__ == "__main__":
-    main()
+    exp_4()
