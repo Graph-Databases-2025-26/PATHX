@@ -101,25 +101,34 @@ Avg Time (s)   & 61.4  & 11.0 & -50.4 & -82.1\% \\
 
 The script \texttt{run\_baselines\_and\_compare.py} orchestrates the NL and SQL baselines. It selects a provider and strategy, runs the baselines on the chosen datasets, and then calls a comparison routine that evaluates their outputs against ground truth using the same metrics later used for GALOIS.
 
+\section{Prompt Construction and LLM Orchestration}
+\label{sec:prompt_orchestration}
 
-\section{Prompt Templates and LLM Interaction}
+This section describes the two core components that enable all LLM-based operators in our system: (i) a templating layer for constructing consistent prompts, and (ii) an execution layer for issuing prompts to the model and collecting responses. Concretely, prompts are generated using Jinja2 templates managed in \texttt{templates.py}, and all model calls are executed through a shared LangChain client.
 
 All prompts used to query the LLM are created via Jinja2 templates and managed by \texttt{templates.py}. Instead of assembling long prompt strings by hand, the code passes structured parameters---dataset name, table name, target attributes, WHERE clause, previously seen rows, and so on---to template functions. These functions return fully instantiated prompts that remain consistent across runs while still being adaptable to each operator and variant.
 
 The most important prompt families are:
 
 \begin{itemize}
-  \item \emph{Table–Scan prompts} ask the LLM to return rows as JSON for a particular table, restricted to a set of attributes and an optional WHERE clause. There is a separate template for the first call and for follow–up calls that list already seen rows.
-  \item \emph{Key–Scan prompts} request only the key attributes (for example a primary key or city name) for rows that satisfy the query. Again there are first and follow–up versions.
-  \item \emph{Tuple–completion prompts} take a key value and ask the LLM for the remaining attributes for that row.
-  \item \emph{Cell–level prompts} ask for a single attribute value for a given key. They are used in the wO variant, where tuples are built cell by cell.
-  \item \emph{Condition–evaluation prompts} present each atomic WHERE condition and ask the LLM to label it as \emph{higher}/\emph{lower} (selectivity mode) or \emph{high}/\emph{low} (confidence mode).
-  \item \emph{Key–confidence prompts} ask the LLM for a scalar in $[0,1]$ that expresses how confident it is that keys can be reliably enumerated for the query.
+  \item \emph{Table--Scan prompts} ask the LLM to return rows as JSON for a particular table, restricted to a set of attributes and an optional WHERE clause. There is a separate template for the first call and for follow--up calls that list already seen rows.
+  \item \emph{Key--Scan prompts} request only the key attributes (for example a primary key or city name) for rows that satisfy the query. Again there are first and follow--up versions.
+  \item \emph{Tuple--completion prompts} take a key value and ask the LLM for the remaining attributes for that row.
+  \item \emph{Cell--level prompts} ask for a single attribute value for a given key. They are used in the wO variant, where tuples are built cell by cell.
+  \item \emph{Condition--evaluation prompts} present each atomic WHERE condition and ask the LLM to label it as \emph{higher}/\emph{lower} (selectivity mode) or \emph{high}/\emph{low} (confidence mode).
+  \item \emph{Key--confidence prompts} ask the LLM for a scalar in $[0,1]$ that expresses how confident it is that keys can be reliably enumerated for the query.
 \end{itemize}
 
-All templates enforce a strict JSON output format. The abstract base class \texttt{BaseScanOperator} wraps the LLM client and provides a method \texttt{call\_llm()} that sends the prompt, measures wall–clock time, extracts token usage from the response metadata, and returns the raw content. A dedicated response parser extracts and repairs JSON snippets where needed and normalizes them into either a list of row dictionaries, a condition–label map, or a scalar value. Higher–level algorithms therefore work with clean, typed objects rather than free text.
+All templates enforce a strict JSON output format. After each call, a dedicated response parser extracts and repairs JSON snippets where needed and normalizes them into typed objects (e.g., a list of row dictionaries, a condition--label map, or a scalar confidence value). This separation allows higher--level algorithms to operate on clean structured outputs rather than free text.
 
-LangChain is used as the execution layer that connects our Python code to the underlying model. Both Table–Scan and Key–Scan use the same client to send the Jinja2–generated prompts and receive outputs. For two–phase retrieval in Key–Scan, LangChain simply executes the two phases as an explicit sequence of calls, which also simplifies logging and time/ token accounting.
+\subsection{Jinja2: Prompt Templating}
+Jinja2 is used as the main mechanism to construct prompts for \texttt{LLMScan} and \texttt{Filter-LLMScan}. The objective is to keep prompts consistent across runs while still allowing each operator to specialize the query according to the table, attribute list, and pushed-down predicates. Rather than concatenating strings in Python, each operator selects a corresponding Jinja2 template (e.g., Table--Scan, Key--Scan, tuple completion, and follow--up variants) and instantiates it by injecting the required parameters at runtime. This design yields a stable prompt family across strategies and makes it straightforward to compare different operator variants under controlled prompt changes.
+
+\subsection{LangChain: LLM Call Execution}
+LangChain serves as the execution backbone that connects our Python operators to the underlying language model. The abstract base class \texttt{BaseScanOperator} wraps the LangChain client and exposes a method \texttt{call\_llm()} that sends the instantiated prompt, measures wall--clock time, extracts token usage from response metadata, and returns the raw content. Both \texttt{LLMScanOperator} and \texttt{FilterLLMScanOperator} rely on the same call path; the main difference is the prompt content (e.g., whether the predicate is pushed down).
+
+For the two-phase retrieval used by Key--Scan, LangChain simply executes the phases as an explicit sequence of calls: first the system prompts for key values satisfying the conditions, and then it iterates over the retrieved keys and issues tuple--completion (or cell--level) prompts to obtain the remaining attributes. Using a single shared execution layer for all calls also simplifies logging and ensures consistent time and token accounting across strategies.
+
 
 \section{LLMScan and Physical Scan Operators}
 
@@ -460,9 +469,5 @@ The fully optimized F variant retrieves the largest set of correct tuples among 
 
 
 \section{Conclusion}
-
-We implemented the main components of the GALOIS framework in Python and evaluated them on benchmark datasets, with a detailed focus on the EU Cities query. The system includes ground–truth construction, Jinja2–based prompt templates, physical implementations of Table–Scan and Key–Scan, a predicate pushdown optimizer, and the four GALOIS variants WO, A, S, and F. NL and SQL baselines provide a reference point for assessing the benefits of structured operator–based execution.
-
-Our experiments confirm the central claim of the GALOIS paper: guiding an LLM with well–designed execution plans substantially improves the completeness and stability of query answers compared to naive prompting. SQL–style prompts already help, but the combination of iterative scanning, selective pushdown, and confidence–based operator choice yields the highest–quality results. Although some details---such as numeric attribute accuracy and single–condition handling in GALOIS S---could be refined further, the system provides an end–to–end realization of GALOIS on modern LLMs and aligns closely with the behaviour reported in the original work.
 
 \end{document}
