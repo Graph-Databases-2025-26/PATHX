@@ -113,7 +113,7 @@ class GaloisF:
             dataset, table, attributes, pushdown_clause
         )
         
-        # Apply formula: conf(q) = LLM_conf(keys|conds)^(1/n)
+        # Apply formula: conf(q) = LLM_conf(keys|conds)^(n)
         n = max(1, len(attributes))
         adjusted_confidence = key_confidence ** (n)
         
