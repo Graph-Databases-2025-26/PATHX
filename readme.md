@@ -120,22 +120,6 @@ python -m src.galois.run_galois \
   --variants galois_wo galois_s galois_a galois_f
 ```
 
-
-Programmatic usage:
-
-```python
-from src.galois.runner.run_galois import GaloisRunner
-runner = GaloisRunner()
-results = runner.run_query(
-    dataset="WORLD",
-    table="EU_Cities",
-    attributes=["name","country","population","num_private_hospitals"],
-    where_clause="population > 1M AND num_private_hospitals > 15"
-)
-runner.compare_results(results)
-runner.save_results(results, "outputs/eu_cities.json")
-```
-
 # GALOIS Algorithms
 
 - **Table-Scan** – retrieve full rows iteratively  
