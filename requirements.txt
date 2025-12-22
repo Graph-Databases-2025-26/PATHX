@@ -36,3 +36,6 @@ pydantic_core==2.23.4
 
 # Testing
 pytest
+
+# Visualization
+matplotlib
