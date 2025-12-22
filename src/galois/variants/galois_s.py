@@ -10,9 +10,12 @@ from ..operators.table_scan import TableScanOperator
 from ..optimizers.pushdown import PushdownOptimizer
 from ..prompts.templates import PromptTemplates
 from ..utils.response_parser import ResponseParser
-from ..utils.where_evaluator import WhereEvaluator
 import time
 from ..operators.base_scan import extract_total_tokens
+from ..operators.base_scan import project_rows
+from ..utils.where_columns import extract_where_columns
+from ..utils.post_filter import post_filter_rows_duckdb
+
 
 class GaloisS:
     """
@@ -57,6 +60,10 @@ class GaloisS:
         attributes: List[str],
         where_clause: Optional[str] = None,
     ) -> Dict[str, Any]:
+        extended_attrs = attributes
+        if where_clause:
+            where_cols = extract_where_columns(where_clause)
+            extended_attrs = attributes + [c for c in where_cols if c not in attributes]
 
         # Parse conditions
         conditions = PushdownOptimizer.parse_conditions(where_clause)
@@ -66,13 +73,13 @@ class GaloisS:
             result = self.table_scan.scan(
                 dataset=dataset,
                 table=table,
-                attributes=attributes,
+                attributes=extended_attrs,
                 where_clause=where_clause,
             )
 
             # Post-filter using the full WHERE clause
             if where_clause:
-                result["result_set"] = WhereEvaluator.filter_rows(result["result_set"], where_clause)
+                result["result_set"] = post_filter_rows_duckdb(result["result_set"], where_clause)
 
             meta = result.setdefault("meta", {})
             meta["variant"] = "Galois_S"
@@ -98,7 +105,7 @@ class GaloisS:
         result = self.table_scan.scan(
             dataset=dataset,
             table=table,
-            attributes=attributes,
+            attributes=extended_attrs,
             where_clause=pushdown_clause,
         )
 
@@ -108,8 +115,10 @@ class GaloisS:
 
         # post-filter full WHERE
         if where_clause:
-            result["result_set"] = WhereEvaluator.filter_rows(result["result_set"], where_clause)
+            result["result_set"] = post_filter_rows_duckdb(result["result_set"], where_clause)
 
+        result["result_set"] = project_rows(result["result_set"], attributes)
+        
         # metadata
         meta = result.setdefault("meta", {})
         meta["variant"] = "Galois_S"

@@ -12,6 +12,10 @@ ground/
 db/
 *.duckdb
 test_results/
+results_galois_wo/
+results_galois_a/
+results_galois_s/
+results_galois_f/
 
 # Baseline-specific output directories
 nl_baseline_azure/

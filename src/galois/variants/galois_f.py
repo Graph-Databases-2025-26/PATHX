@@ -12,8 +12,10 @@ from ..optimizers.pushdown import PushdownOptimizer
 from ..prompts.templates import PromptTemplates
 from ..utils.response_parser import ResponseParser
 import time
-from ..utils.where_evaluator import WhereEvaluator
+from ..utils.where_columns import extract_where_columns
+from ..utils.post_filter import post_filter_rows_duckdb
 from ..operators.base_scan import extract_total_tokens
+from ..operators.base_scan import project_rows
 
 class GaloisF:
     """
@@ -78,6 +80,11 @@ class GaloisF:
         Step 1: LOGICAL - Determine pushdown based on confidence
         Step 2: PHYSICAL - Choose scan strategy based on confidence
         """
+        extended_attrs = attributes
+        if where_clause:
+            where_cols = extract_where_columns(where_clause)
+            extended_attrs = attributes + [c for c in where_cols if c not in attributes]
+        
         # Parse conditions
         conditions = PushdownOptimizer.parse_conditions(where_clause)
 
@@ -106,9 +113,9 @@ class GaloisF:
             dataset, table, attributes, pushdown_clause
         )
         
-        # Apply formula: conf(q) = LLM_conf(keys|conds)^(1/n)
+        # Apply formula: conf(q) = LLM_conf(keys|conds)^(n)
         n = max(1, len(attributes))
-        adjusted_confidence = key_confidence ** (1.0 / n)
+        adjusted_confidence = key_confidence ** (n)
         
         # Choose scan strategy
         if adjusted_confidence >= self.confidence_threshold:
@@ -116,7 +123,7 @@ class GaloisF:
             result = self.key_scan.scan(
                 dataset=dataset,
                 table=table,
-                attributes=attributes,
+                attributes=extended_attrs,
                 where_clause=pushdown_clause,
             )
             scan_chosen = "key_scan"
@@ -125,7 +132,7 @@ class GaloisF:
             result = self.table_scan.scan(
                 dataset=dataset,
                 table=table,
-                attributes=attributes,
+                attributes=extended_attrs,
                 where_clause=pushdown_clause,
             )
             scan_chosen = "table_scan"
@@ -136,9 +143,10 @@ class GaloisF:
 
         # Apply full WHERE clause as post-filter for non-pushed conditions
         if where_clause:
-            result["result_set"] = WhereEvaluator.filter_rows(
-                result["result_set"], where_clause
+            result["result_set"] = post_filter_rows_duckdb(
+                result["result_set"], [where_clause]
             )
+        result["result_set"] = project_rows(result["result_set"], attributes)
         
         # Add metadata
         meta = result.setdefault("meta", {})

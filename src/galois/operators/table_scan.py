@@ -77,7 +77,7 @@ class TableScanOperator(BaseScanOperator):
         iterations_used = 1  # first iteration counted
 
         # --- FOLLOW-UP ITERATIONS ---
-        for i in range(1, self.max_iters + 1):
+        for i in range(1, self.max_iters):
             # build context-based follow-up
             followup_prompt = PromptTemplates.table_scan_followup(previous_rows=all_rows)
 

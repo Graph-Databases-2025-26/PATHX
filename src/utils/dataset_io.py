@@ -33,24 +33,39 @@ def dataset_dir(dataset: str) -> Path:
 def read_queries(dataset_dir: Path) -> List[str]:
     """
     Loads SQL queries from files named queries_*.sql located inside dataset_dir.
-    Returns a list of full SQL strings.
+    Dataset format:
+        --query1
+        SELECT ...;
+        --query2
+        SELECT ...;
+    Returns a list of SQL strings (each starts with SELECT, without the --query header).
     """
-
     sql_files = sorted(dataset_dir.glob("queries_*.sql"))
     queries: List[str] = []
 
     for f in sql_files:
-        content = f.read_text(encoding="utf-8").strip()
-        if not content:
-            continue
+        text = f.read_text(encoding="utf-8")
 
-        # Split by semicolon, support multiple queries in one file
-        for q in content.split(";"):
+        # Split by --queryN headers (case-insensitive)
+        parts = re.split(r"(?im)^--\s*query[^\n]*\n", text)
+
+        # parts[0] — ignore preamble before first --query
+        for block in parts[1:]:
+            q = block.strip()
+            if not q:
+                continue
+
+            # Many files have a single query ending with ';'
+            # Keep content but remove trailing semicolons safely
             q = q.strip()
+            if q.endswith(";"):
+                q = q[:-1].strip()
+
             if q:
                 queries.append(q)
 
     return queries
+
 
 
 def read_nl_queries(dataset_dir: Path) -> List[str]:

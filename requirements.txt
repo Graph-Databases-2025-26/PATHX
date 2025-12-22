@@ -3,6 +3,7 @@ duckdb
 pandas
 numpy
 orjson
+sqlglot
 
 # String matching / Utils
 rapidfuzz
