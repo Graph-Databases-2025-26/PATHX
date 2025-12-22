@@ -1,0 +1,34 @@
+{
+  "sql": "SELECT avg(population) FROM target.usa_state",
+  "parsed": {
+    "table": "usa_state",
+    "scan_columns": [
+      "population"
+    ],
+    "select_plain_columns": null,
+    "where_clause": null
+  },
+  "result_set": [
+    {
+      "avg(population)": 30042.7
+    }
+  ],
+  "time": 44.988792915344234,
+  "tokens": 4722,
+  "meta": {
+    "num_keys": 50,
+    "strategy": "key_scan",
+    "variant": "Galois_F",
+    "pushdown": "confidence",
+    "confidence_evaluation": {},
+    "pushed_conditions": null,
+    "key_confidence": 0.99,
+    "adjusted_confidence": 0.99,
+    "confidence_threshold": 0.6,
+    "scan_chosen": "key_scan",
+    "dataset": "geo",
+    "table": "usa_state",
+    "query_idx": 7,
+    "provider": "gemini"
+  }
+}

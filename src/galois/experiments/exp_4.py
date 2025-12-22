@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
 from src.config.constants import DATA_DIR, GROUND_PATH
+import pandas as pd
 
 
 SCRIPTS_DIR = DATA_DIR.parent / "scripts"
@@ -217,6 +218,7 @@ def main() -> None:
             )
 
     _print_table_6_replication(rows)
+
 
 
 if __name__ == "__main__":
