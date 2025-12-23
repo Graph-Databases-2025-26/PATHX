@@ -1,4 +1,4 @@
-# GALOIS: LLM-Driven Query Processing Framework
+# GALOIS project: LLM-Driven Query Processing Framework
 *University of Padua — Graph Databases 2025/26*  
 **Team PATHX:** Juliette Tonneau · Minseok Kim · Bita Khashechian · Danil Smirnov
 
