@@ -457,6 +457,263 @@ The fully optimized F variant retrieves the largest set of correct tuples among 
 
 \section{Experiments}
 
+This section describes in more detail the experiments presented in the GALOIS paper to demonstrate the quality of the proposed approach.
+All experiments are conducted on the same benchmark datasets and rely on the same ground-truth results constructed as described in Section~2.
+We evaluate the NL, SQL, GALOIS-WO, GALOIS-A, and GALOIS-F systems.
+Unless stated otherwise, the main evaluation metric is the \textit{AVG-Score}, defined as the mean of \textit{F1-Cell}, \textit{Cardinality}, and \textit{Tuple-Constraint}.
+
+\subsection{Experiment 1: Overall Evaluation}
+
+In this experiment, we evaluate the overall performance of the GALOIS variants against the NL, SQL, and GALOIS baselines using the Llama-3.1-70B model.
+This experiment provides a global comparison across all queries and datasets without conditioning on query structure or semantics.
+
+Table~\ref{tab:exp1_overall_results} reports our replication of Table~3 from the original paper, presenting the results obtained in our implementation.
+
+\begin{table}[htbp]
+\centering
+\caption{Overall performance comparison between baselines and GALOIS variants (Experiment 1)}
+\label{tab:exp1_overall_results}
+\begin{tabular}{lcccccc}
+\hline
+Metric 
+& SQL 
+& NL 
+& GALOIS\_WO 
+& GALOIS\_S 
+& GALOIS\_A 
+& GALOIS\_F \\
+\hline
+F1-Cell       
+& \textit{0.396}
+& 0.373
+& 0.157
+& 0.312
+& \textbf{0.529}
+& 0.256 \\
+
+Cardinality   
+& \textit{0.659}
+& 0.541
+& 0.186
+& 0.384
+& \textbf{0.734}
+& 0.311 \\
+
+Tuple Constr. 
+& \textit{0.195}
+& 0.155
+& 0.063
+& 0.182
+& \textbf{0.317}
+& 0.136 \\
+
+AVG-Score     
+& \textit{0.417}
+& 0.356
+& 0.135
+& 0.293
+& \textbf{0.527}
+& 0.234 \\
+
+\#Tokens (M)  
+& \textbf{0.171}
+& \textit{0.293}
+& 1.775
+& 0.205
+& 0.307
+& 0.254 \\
+
+Avg Time (s)  
+& \textbf{11.000}
+& \textit{22.816}
+& 136.736
+& 18.305
+& 29.076
+& 52.374 \\
+\hline
+\end{tabular}
+\end{table}
+
+
+
+In the results, we observe that the optimized GALOIS variants consistently outperform the NL and SQL baselines in terms of AVG-Score, confirming the effectiveness of structured execution strategies over monolithic prompting.
+
+\subsection{Experiment 2: Effectiveness of the Optimizations}
+
+Experiment~2 evaluates the effectiveness of both logical and physical optimizations in GALOIS.
+For each query, a confidence estimator selects candidate \texttt{WHERE} predicates for pushdown, after which three physical strategies are evaluated: a fixed \textit{Table-Scan}, a fixed \textit{Key-Scan}, and an \textit{automatic} strategy that dynamically selects between them.
+In addition, we compare three logical pushdown policies: no pushdown, full pushdown, and confidence-based selective pushdown.
+
+Results are reported in Table~\ref{tab:exp2_optimizations}, including both AVG-Score and the number of generated tokens.
+
+\begin{table}[htbp]
+\centering
+\caption{Effectiveness of logical and physical optimizations (Experiment~2)}
+\label{tab:exp2_optimizations}
+\begin{tabular}{lcccccc}
+\hline
+Metric & NO-PUSH & GALOIS\_A & GALOIS\_F \\
+\hline
+AVG-Score      & 0.631 & \textit{0.579} & \textbf{0.699} \\
+\#Tokens (M)   & 0.178 & \textit{0.098} & \textbf{0.090} \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Experiment 3: Impact of LLM Parameters}
+
+Experiment~3 analyzes how varying the confidence threshold used within GALOIS-F affects the precision--recall trade-off.
+For each query, only rows whose associated confidence exceeds a given threshold are retained.
+Cell-level precision and recall are then computed against ground truth using the same similarity metric as in the main evaluation.
+
+\subsection{Experiment 4: Impact of Retrieved Values}
+
+Experiment~4 evaluates system performance across semantic and temporal query categories using the \textit{Presidents} dataset.
+Queries are grouped by country and by temporal scope, and results from all methods are aggregated within each group.
+The AVG-Score of each group is then compared to assess whether performance gains generalize across different semantic domains and time horizons.
+
+Table~\ref{tab:exp4_country} reports quality results in terms of AVG-Score when comparing the rarity of values across countries, while Table~\ref{tab:exp4_time} focuses on temporal categories.
+
+\begin{table}[htbp]
+\centering
+\caption{Quality results (AVG-Score) by country category (Experiment~4)}
+\label{tab:exp4_country}
+\begin{tabular}{lccccc}
+\hline
+Dataset & NL & SQL & GALOIS\_WO & GALOIS\_A & GALOIS\_F \\
+\hline
+Presidents--USA
+& 0.260
+& 0.532
+& 0.726
+& \textit{0.785}
+& \textbf{0.842} \\
+
+Presidents--Venezuela
+& 0.207
+& 0.275
+& 0.407
+& \textit{0.416}
+& \textbf{0.475} \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Quality results (AVG-Score) by temporal category (Experiment~4)}
+\label{tab:exp4_time}
+\begin{tabular}{lccccc}
+\hline
+Dataset & NL & SQL & GALOIS\_WO & GALOIS\_A & GALOIS\_F \\
+\hline
+Recent
+& 0.204
+& 0.392
+& 0.524
+& \textit{0.579}
+& \textbf{0.617} \\
+
+Past
+& 0.168
+& 0.298
+& 0.462
+& \textit{0.512}
+& \textbf{0.542} \\
+
+All-Time
+& 0.319
+& 0.554
+& 0.695
+& \textit{0.716}
+& \textbf{0.848} \\
+\hline
+\end{tabular}
+\end{table}
+
+As we can see in the table~\ref{tab:exp4_country}, performance of a query is affected by the size of the data in the training set. Indeed, we obtain better results on a "popular" data.
+
+Quality is also affected by how recent is the data we are querying. Table~\ref{tab:exp4_time} show that querying on recent data provides better results. It confirms the theory of the GALOIS paper: LLMs are more trained on recent data than past data
+
+\subsection{Experiment 5: Impact of Query Complexity}
+
+Experiment~5 evaluates the impact of query complexity on system performance.
+Queries are characterized into six categories of increasing complexity based on the type (textual versus numerical) and number of conditions appearing in the \texttt{WHERE} clause.
+
+Table~\ref{tab:exp5_where_conditions} reports the AVG-Score achieved under different selection conditions.
+
+\begin{table}[htbp]
+\centering
+\caption{AVG-Score by WHERE condition type and count (Experiment 5)}
+\label{tab:exp5_where_conditions}
+\begin{tabular}{lcccccc}
+\hline
+Condition(s) & \#Q & NL & SQL & GALOIS\_WO & GALOIS\_A & GALOIS\_F \\
+\hline
+1 TEXTUAL
+& 24
+& 0.367
+& \textbf{0.545}
+& 0.032
+& \textit{0.508}
+& 0.200 \\
+
+$>$1 TEXTUAL
+& 10
+& \textbf{0.491}
+& \textit{0.442}
+& 0.000
+& 0.470
+& 0.000 \\
+
+$>$1 TEXT., 1 NUMER.
+& 2
+& \textbf{0.770}
+& 0.498
+& 0.000
+& \textit{0.731}
+& 0.000 \\
+
+$>$1 TEXT., $>$1 NUMER.
+& 4
+& \textbf{0.562}
+& \textit{0.456}
+& 0.000
+& 0.453
+& 0.000 \\
+
+1 NUMERICAL
+& 10
+& 0.189
+& 0.180
+& \textit{0.265}
+& \textbf{0.411}
+& 0.328 \\
+
+$>$1 NUMERICAL
+& 5
+& 0.303
+& 0.245
+& \textbf{0.689}
+& \textit{0.685}
+& \textit{0.685} \\
+
+OTHER
+& 22
+& 0.297
+& \textit{0.397}
+& 0.162
+& \textbf{0.584}
+& 0.297 \\
+
+\hline
+\end{tabular}
+\end{table}
+
+
+
+Results in Table~\ref{tab:exp5_where_conditions} show that query complexity has a strong impact on baseline methods, while the optimized GALOIS variants exhibit more robust behavior as logical constraints become more complex.
+
 
 \section{Conclusion}
 
