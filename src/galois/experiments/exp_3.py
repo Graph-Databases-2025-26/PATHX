@@ -93,3 +93,17 @@ def _load_prediction_file(path: Path):
     return rows, logprobs
 
 
+def run_experiment_3():
+    log_init()
+
+    thresholds = [0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 0.995]
+    results_map = {t: {"precisions": [], "recalls": []} for t in thresholds}
+
+    base_pred_path = Path(SUBMISSIONS_PATH_GALOIS) / "GALOIS_F"
+
+    LOG.info("Running threshold sweep for cell-level precision and recall.")
+    LOG.info(f"Predictions root: {base_pred_path}")
+    LOG.info(f"Ground-truth root: {GROUND_PATH}")
+    LOG.info(f"Datasets: {IK_DATASETS}")
+
+  
