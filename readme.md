@@ -4,7 +4,7 @@
 
 This repository contains two major components:
 
-# ** Deterministic Pipelines**  
+# Deterministic Pipelines
 Full DuckDB-based pipeline used to reproduce baseline results from the SIGMOD’25 *GALOIS* paper:  
 - build ground truth  
 - ingest CSV datasets  
@@ -13,7 +13,7 @@ Full DuckDB-based pipeline used to reproduce baseline results from the SIGMOD’
 - evaluate with GALOIS metrics  
 - export EXPLAIN/ANALYZE plans
 
-# ** GALOIS Engine **  
+# GALOIS Engine 
 A complete and extensible re-implementation of the *GALOIS* LLM query processor (2025):
 
 - Table-Scan (Algorithm 1)  
@@ -164,12 +164,15 @@ prompt = env.get_template("table_scan_first.j2").render(...)
 
 ---
 
-# Outputs
+# Output folders
 
 ```
-outputs/
-  galois_results_<dataset>.json
-  comparison_tables/
+nl_baseline_results/<dataset>/
+sql_baseline_results/<dataset>/
+galois_results_wo/<dataset>/
+galois_results_a/<dataset>/
+galois_results_f/<dataset>/
+galois_results_s/<dataset>/
 ```
 
 ---
