@@ -2,9 +2,24 @@
 *University of Padua — Graph Databases 2025/26*  
 **Team PATHX:** Juliette Tonneau · Minseok Kim · Bita Khashechian · Danil Smirnov
 
-This repository contains two major components:
+## Project Overview and Objectives
+This project investigates the integration of Large Language Models (LLMs) into database query execution pipelines, following and extending the design principles introduced by the GALOIS framework.
+The primary focus is on understanding how LLM-driven operators can be systematically embedded into relational query processing, and how different optimization strategies impact result quality, execution cost, and scalability.
+The project provides an end-to-end experimental reproduction of the GALOIS framework, including multiple baselines and optimized variants, evaluated across heterogeneous datasets and query workloads.
 
-# Deterministic Pipelines
+### Objectives
+- Hybrid Query Processing Analysis
+Study how LLM-assisted execution plans interact with classical database operators, and evaluate the effectiveness of hybrid execution strategies compared to traditional SQL and Natural Language (NL) baselines.
+- Quality Evaluation of LLM-Driven Retrieval
+Quantitatively assess the accuracy and completeness of query results using the metrics defined in the GALOIS paper: Cell-level F1, Cardinality Accuracy, Tuple constraint accuracy amd Aggregated AVG-Score
+- Optimization Strategy Assessment
+Analyze the impact of logical and physical optimizations, including: predicate push-down straegies, table-scan vs key-scan selection, automatic plan selection (Galois A, Galois F)
+- Cost–Quality Trade-off Analysis
+Measure the trade-offs between result quality and execution cost by tracking total token consumption, number of execution iterations and average query execution time
+- Reproducibility and Experimental Transparency
+Provide a modular, fully reproducible experimental pipeline implementing NL and SQL baselines, multiple GALOIS variants and automated evaluation and reporting scripts aligned with the original paper
+
+## Deterministic Pipelines
 Full DuckDB-based pipeline used to reproduce baseline results from the SIGMOD’25 *GALOIS* paper:  
 - build ground truth  
 - ingest CSV datasets  
@@ -13,7 +28,7 @@ Full DuckDB-based pipeline used to reproduce baseline results from the SIGMOD’
 - evaluate with GALOIS metrics  
 - export EXPLAIN/ANALYZE plans
 
-# GALOIS Engine 
+## GALOIS Engine 
 A complete and extensible re-implementation of the *GALOIS* LLM query processor (2025):
 
 - Table-Scan (Algorithm 1)  
@@ -25,7 +40,7 @@ A complete and extensible re-implementation of the *GALOIS* LLM query processor 
 
 This module can execute SQL queries directly via LLM operators, compare algorithms, and produce full cost/time/token analyses.
 
-# Installation
+## Installation
 
 ```bash
 python -m venv .venv
