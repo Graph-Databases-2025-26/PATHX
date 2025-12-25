@@ -20,7 +20,23 @@
 
 \tableofcontents
 
-\section{Introduction}
+\section{GALOIS Features: Introduction and Scope}
+
+\subsection{Context and Motivation}
+
+Building on the technical setup and baseline implementations introduced in the previous project phases, this part focuses on the implementation of the GALOIS framework. In the first phase, the necessary infrastructure was established, including database setup, LLM orchestration, configuration management, and a unified execution pipeline. In the second phase, NL and SQL baselines were implemented and evaluated to assess the behavior of LLMs when answering queries without explicit query planning or optimization.
+
+The baseline results highlighted several limitations of direct LLM-based querying. In particular, a single LLM invocation often fails to retrieve complete result sets, especially for queries involving multiple predicates, joins, or aggregations. While iterative execution partially mitigates these issues, the baselines still treat the LLM as a monolithic query solver, without exploiting the structure of SQL queries.
+
+\subsection{Scope of the GALOIS Phase}
+
+The goal of this phase is to move beyond baseline prompting and implement the core ideas of the GALOIS execution model. Instead of issuing a single prompt per query, the system decomposes SQL queries into logical and physical operators, following a database-style execution pipeline. In this design, the LLM is used exclusively as a data retrieval mechanism, while all relational operations such as selection, projection, joins, grouping, and aggregation are executed locally.
+
+\subsection{Overview of Implemented Components}
+
+Within this scope, we implement several GALOIS variants that differ in their optimization strategies. These variants explore different approaches to predicate pushdown and scan selection, allowing us to study the trade-off between result quality and execution cost. The implemented variants include a version without optimizations, selective and full predicate pushdown strategies, as well as a confidence-based variant that dynamically selects execution plans.
+
+This section covers the design, implementation, and evaluation of the GALOIS operators and variants. The objective is not to fully reproduce a production-ready query optimizer, but to demonstrate how classical database execution concepts can be adapted to LLM-based query processing, and to analyze their practical impact compared to the NL and SQL baselines introduced earlier.
 
 \section{Data and Ground–Truth Construction}
 
@@ -38,13 +54,13 @@ A separate utility module, \texttt{dataset\_io.py}, encapsulates the discovery o
 
 \subsection{Non–iterative baseline behaviour}
 
-The simplest baseline treats the LLM as a one–shot question–answering system. In our implementation, this one-shot baseline uses IBM WatsonX Llama-3.1-70B as the LLM model. In the natural–language version, the model receives a textual query describing the task and is asked to answer in tabular JSON form. In the SQL version, it is asked to produce or execute a SQL statement, whose result is then retrieved from DuckDB.
+The simplest baseline treats the LLM as a one–shot question–answering system. In our implementation, this one-shot baseline uses IBM WatsonX Llama-3.3-70B as the LLM model. In the natural–language version, the model receives a textual query describing the task and is asked to answer in tabular JSON form. In the SQL version, it is asked to produce or execute a SQL statement, whose result is then retrieved from DuckDB.
 
 This is extremely cheap and straightforward, but our earlier experiments showed that it rarely produces complete result sets. For queries with multiple conditions or attributes, the model often omits relevant rows or misreads part of the specification. Since the system performs no further checks or retries, these errors remain.
 
 \subsection{Iterative NL and SQL baselines}
 
-To mitigate the incompleteness of one–shot responses, we implemented iterative baselines using the same model (Llama-3.1-70B). The first prompt describes the dataset, table, attributes, and conditions; the LLM returns an initial batch of rows. A follow–up prompt lists the rows already seen and explicitly asks the model to produce new ones without repetition. Newly generated rows are deduplicated and added. This cycle repeats until no new rows appear or a maximum iteration count is reached.
+To mitigate the incompleteness of one–shot responses, we implemented iterative baselines using the same model (Llama-3.3-70B). The first prompt describes the dataset, table, attributes, and conditions; the LLM returns an initial batch of rows. A follow–up prompt lists the rows already seen and explicitly asks the model to produce new ones without repetition. Newly generated rows are deduplicated and added. This cycle repeats until no new rows appear or a maximum iteration count is reached.
 
 In the NL baseline, all interaction is in natural language; in the SQL baseline, the model refines or extends SQL statements and the resulting queries are executed in DuckDB. Iteration markedly improves recall: the model gradually fills in less obvious entries and moves closer to a full table.
 
@@ -65,7 +81,7 @@ AVG--Score     & 0.254 & 0.339 & +0.085 &  +33.5\% \\
 Avg Time (s)   & 120.0 & 21.25 & -98.75 & -82.3\% \\
 \bottomrule
 \end{tabular}
-\caption{NL baseline comparison between the paper and our implementation using Llama-3.1-70B.}
+\caption{NL baseline comparison between the paper and our implementation using Llama-3.3-70B.}
 \end{table}
 
 \begin{table}[h]
@@ -83,17 +99,17 @@ AVG--Score     & 0.481 & 0.407 & -0.074 & -15.4\% \\
 Avg Time (s)   & 61.4  & 11.0 & -50.4 & -82.1\% \\
 \bottomrule
 \end{tabular}
-\caption{SQL baseline comparison between the paper and our implementation using Llama-3.1-70B.}
+\caption{SQL baseline comparison between the paper and our implementation using Llama-3.3-70B.}
 \end{table}
 
 \subsection{Baseline orchestration}
 
-The script \texttt{run\_baselines\_and\_compare.py} orchestrates the NL and SQL baselines. It selects a provider and strategy, runs the baselines on the chosen datasets, and then calls a comparison routine that evaluates their outputs against ground truth using the same metrics later used for GALOIS.
+The script \texttt{run\_baselines\_and\_compare.py} orchestrates the NL and SQL baselines. It selects a provider and strategy, runs the baselines on the chosen datasets, and then calls a comparison routine that evaluates their outputs against ground truth using the same metrics later used for GALOIS. These baselines serve as the reference execution model that GALOIS later decomposes into explicit operators.
 
 \section{Prompt Construction and LLM Orchestration}
 \label{sec:prompt_orchestration}
 
-This section describes the two core components that enable all LLM-based operators in our system: (i) a templating layer for constructing consistent prompts, and (ii) an execution layer for issuing prompts to the model and collecting responses. Concretely, prompts are generated using Jinja2 templates managed in \texttt{templates.py}, and all model calls are executed through a shared LangChain client. In all experiments, the shared LangChain client is configured to call ibm watsonx Llama-3.1-70B, and we keep this model fixed across baselines and all GALOIS variants to ensure a controlled comparison.
+This section describes the two core components that enable all LLM-based operators in our system: (i) a templating layer for constructing consistent prompts, and (ii) an execution layer for issuing prompts to the model and collecting responses. Concretely, prompts are generated using Jinja2 templates managed in \texttt{templates.py}, and all model calls are executed through a shared LangChain client. In all experiments, the shared LangChain client is configured to call ibm watsonx Llama-3.3-70B, and we keep this model fixed across baselines and all GALOIS variants to ensure a controlled comparison.
 
 All prompts used to query the LLM are created via Jinja2 templates and managed by \texttt{templates.py}. Instead of assembling long prompt strings by hand, the code passes structured parameters---dataset name, table name, target attributes, WHERE clause, previously seen rows, and so on---to template functions. These functions return fully instantiated prompts that remain consistent across runs while still being adaptable to each operator and variant.
 
@@ -111,10 +127,10 @@ The most important prompt families are:
 All templates enforce a strict JSON output format. After each call, a dedicated response parser extracts and repairs JSON snippets where needed and normalizes them into typed objects (e.g., a list of row dictionaries, a condition--label map, or a scalar confidence value). This separation allows higher--level algorithms to operate on clean structured outputs rather than free text.
 
 \subsection{Jinja2: Prompt Templating}
-Jinja2 is used as the main mechanism to construct prompts for \texttt{LLMScan} and \texttt{Filter-LLMScan}. The objective is to keep prompts consistent across runs while still allowing each operator to specialize the query according to the table, attribute list, and pushed-down predicates. Rather than concatenating strings in Python, each operator selects a corresponding Jinja2 template (e.g., Table--Scan, Key--Scan, tuple completion, and follow--up variants) and instantiates it by injecting the required parameters at runtime. This design yields a stable prompt family across strategies and makes it straightforward to compare different operator variants under controlled prompt changes.
+Jinja2 is used as the main mechanism to construct prompts for \texttt{LLMScan} and \texttt{Filter-LLMScan}. The objective is to keep prompts consistent across runs while still allowing each operator to specialize the query according to the table, attribute list, and pushed-down predicates. Rather than concatenating strings in Python, each operator selects a corresponding Jinja2 template (e.g., Table--Scan, Key--Scan, tuple completion, and follow--up variants) and instantiates it by injecting the required parameters at runtime. This design yields a stable prompt family across strategies and makes it straightforward to compare different operator variants under controlled prompt changes. This design also simplifies ablation studies, as changes to prompt structure are localized and do not affect the surrounding execution logic.
 
 \subsection{LangChain: LLM Call Execution}
-LangChain serves as the execution backbone that connects our Python operators to the underlying language model. The abstract base class \texttt{BaseScanOperator} wraps the LangChain client and exposes a method \texttt{call\_llm()} that sends the instantiated prompt, measures wall--clock time, extracts token usage from response metadata, and returns the raw content. Both \texttt{LLMScanOperator} and \texttt{FilterLLMScanOperator} rely on the same call path; the main difference is the prompt content (e.g., whether the predicate is pushed down).
+LangChain serves as the execution backbone that connects our Python operators to the underlying language model. The abstract base class \texttt{BaseScanOperator} wraps the LangChain client and exposes a method \texttt{call\_llm()} that sends the instantiated prompt, measures wall--clock time, extracts token usage from response metadata, and returns the raw content. Both \texttt{LLMScanOperator} and \texttt{FilterLLMScanOperator} rely on the same call path; the main difference is the prompt content (e.g., whether the predicate is pushed down). This centralized execution layer guarantees consistent time and token accounting across all operators, baselines, and GALOIS variants.
 
 For the two-phase retrieval used by Key--Scan, LangChain simply executes the phases as an explicit sequence of calls: first the system prompts for key values satisfying the conditions, and then it iterates over the retrieved keys and issues tuple--completion (or cell--level) prompts to obtain the remaining attributes. Using a single shared execution layer for all calls also simplifies logging and ensures consistent time and token accounting across strategies.
 
@@ -247,7 +263,7 @@ The chosen scan operator runs with the pushed conditions. The full WHERE clause 
 
 \section{Experimental Pipeline}
 This section describes the sequence of steps used to run all experiments. The same procedure was followed for every run, beginning with the construction of the ground-truth data, continuing through dataset ingestion and baseline evaluation, and ending with the execution of the GALOIS-inspired query engine.
-Unless otherwise stated, all runs in this pipeline use the same LLM backend (Llama-3.1-70B) for the NL baseline, SQL baseline, and all GALOIS operator variants.
+Unless otherwise stated, all runs in this pipeline use the same LLM backend (Llama-3.3-70B) for the NL baseline, SQL baseline, and all GALOIS operator variants.
 \subsection{Stages 1 and 2 commands}
 The first stage of the workflow prepares the ground truth. This step processes the raw data files for datasets and produces a reference used in all evaluations. The ground truth was generated by running:
 
@@ -295,13 +311,20 @@ python -m src.baselines.compare_results
 Following the baseline evaluation, the full GALOIS-inspired query engine was executed. This includes the LLMScan operator, the Filter-LLMScan operator, and the Two-Phase Key-First Retrieval operator. All operator variants were run using:
 
 \begin{verbatim}
-python -m src.galois.run_galois
+python -m src.galois.run_galois \
+  --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 \
+  --variants galois_wo galois_s galois_a galois_f
 \end{verbatim}
 
-In addition to the full run, a direct comparison between the naive single-shot LLM response and the GALOIS execution plan was produced by executing:
+Compare all results and print the table:
 
 \begin{verbatim}
-python -m src.galois.naive_vs_galois
+python -m src.galois.experiments.exp1_table \
+  --ground ground \
+  --submissions sql_baseline_results nl_baseline_results results_galois_wo results_galois_s results_galois_a results_galois_f \
+  --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 \
+  --cell-metric similarity \
+  --tuple-metric constraint
 \end{verbatim}
 
 This comparison illustrates the difference between monolithic prompting and structured, operator-guided execution.
@@ -464,7 +487,7 @@ Unless stated otherwise, the main evaluation metric is the \textit{AVG-Score}, d
 
 \subsection{Experiment 1: Overall Evaluation}
 
-In this experiment, we evaluate the overall performance of the GALOIS variants against the NL, SQL, and GALOIS baselines using the Llama-3.1-70B model.
+In this experiment, we evaluate the overall performance of the GALOIS variants against the NL, SQL, and GALOIS baselines using the Llama-3.3-70B model.
 This experiment provides a global comparison across all queries and datasets without conditioning on query structure or semantics.
 
 Table~\ref{tab:exp1_overall_results} reports our replication of Table~3 from the original paper, presenting the results obtained in our implementation.
