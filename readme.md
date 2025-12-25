@@ -374,46 +374,12 @@ python -m src.galois.experiments.exp1_table \
 This section reports the quantitative results obtained by our implementation of GALOIS variants.
 All metrics are computed using the official evaluation pipeline (scripts/galois_eval.py) and averaged over all datasets: **FLIGHT-2, FLIGHT-4, FORTUNE, GEO, MOVIES, PREMIER, PRESIDENTS, WORLD**
 
-### GALOIS_WO
+| Metric           | GALOIS_WO | GALOIS_S  | GALOIS_A  | GALOIS_F  |
+| ---------------- | --------- | --------- | --------- | --------- |
+| F1-Cell          | 0.145     | 0.500     | 0.520     | 0.435     |
+| Cardinality      | 0.178     | 0.609     | 0.711     | 0.567     |
+| Tuple Constraint | 0.065     | 0.300     | 0.330     | 0.247     |
+| **AVG-Score**    | **0.129** | **0.469** | **0.521** | **0.416** |
+| #Tokens (M)      | 2.078     | 0.378     | 0.366     | 0.515     |
+| Avg Time (s)     | 143.971   | 28.836    | 29.535    | 77.247    |
 
-| Metric           | Paper     | Ours      | Δ (Paper − Ours) | 
-| ---------------- | --------- | --------- | ---------------- |
-| F1-Cell          | 0.518     | 0.233     | 0.285            |
-| Cardinality      | 0.691     | 0.288     | 0.403            |
-| Tuple Constraint | 0.389     | 0.105     | 0.284            |
-| **AVG-Score**    | **0.531** | **0.209** | **0.322**        |
-| #Tokens (M)      | 19.710    | 2.078     | 17.632           |
-| Avg Time (s)     | 1460.0    | 232.374   | 1227.626         |
-
-### GALOIS_S
-
-| Metric           | Paper     | Ours      | Δ (Paper − Ours) |
-| ---------------- | --------- | --------- | ---------------- |
-| F1-Cell          | 0.480     | 0.504     | -0.024           |
-| Cardinality      | 0.655     | 0.611     | 0.044            |
-| Tuple Constraint | 0.365     | 0.321     | 0.044            |
-| **AVG-Score**    | **0.500** | **0.479** | **0.021**        |
-| #Tokens (M)      | 0.960     | 0.234     | 0.726            |
-| Avg Time (s)     | 130.0     | 30.501    | 99.499           |
-
-### GALOIS_A
-
-| Metric           | Paper     | Ours      | Δ (Paper − Ours) |
-| ---------------- | --------- | --------- | ---------------- |
-| F1-Cell          | 0.543     | 0.532     | 0.011            |
-| Cardinality      | 0.799     | 0.687     | 0.112            |
-| Tuple Constraint | 0.448     | 0.344     | 0.104            |
-| **AVG-Score**    | **0.592** | **0.521** | **0.071**        |
-| #Tokens (M)      | 0.950     | 0.230     | 0.720            |
-| Avg Time (s)     | 120.5     | 31.126    | 89.374           |
-
-### GALOIS_F
-
-| Metric           | Paper     | Ours      | Δ (Paper − Ours) |
-| ---------------- | --------- | --------- | ---------------- |
-| F1-Cell          | 0.563     | 0.421     | 0.142            |
-| Cardinality      | 0.835     | 0.522     | 0.313            |
-| Tuple Constraint | 0.464     | 0.259     | 0.205            |
-| **AVG-Score**    | **0.622** | **0.401** | **0.221**        |
-| #Tokens (M)      | 1.720     | 0.315     | 1.405            |
-| Avg Time (s)     | 47.4      | 83.805    | -36.405          |
