@@ -14,9 +14,9 @@ import duckdb
 import pandas as pd
 from sqlglot import exp, parse_one
 
-from ..config.config import load_config, AppConfig  # type: ignore
-from ..utils.dataset_io import discover_datasets, read_queries  # type: ignore
-from ..baselines.llm_factory import get_llm_wrapper  # type: ignore
+from ..config.config import load_config, AppConfig
+from ..utils.dataset_io import discover_datasets, read_queries
+from ..baselines.llm_factory import get_llm_wrapper
 
 from .variants.galois_wo import GaloisWOOperator
 from .variants.galois_a import GaloisA
@@ -336,12 +336,12 @@ def save_galois_result_json(
 ) -> None:
     """
     Saves under project root:
-      galois_wo/<DATASET>/query1.json
-      galois_a/<DATASET>/query1.json
-      galois_s/<DATASET>/query1.json
-      galois_f/<DATASET>/query1.json
+      results_galois_wo/<DATASET>/query1.json
+      results_galois_a/<DATASET>/query1.json
+      results_galois_s/<DATASET>/query1.json
+      results_galois_f/<DATASET>/query1.json
     """
-    variant_folder = variant.lower().removeprefix("results_")
+    variant_folder = "results_" + variant.lower()
     out_dir = Path(variant_folder) / dataset
     out_dir.mkdir(parents=True, exist_ok=True)
 
