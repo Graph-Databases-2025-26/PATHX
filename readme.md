@@ -376,10 +376,10 @@ All metrics are computed using the official evaluation pipeline (scripts/galois_
 
 | Metric           | GALOIS_WO | GALOIS_S  | GALOIS_A  | GALOIS_F  |
 | ---------------- | --------- | --------- | --------- | --------- |
-| F1-Cell          | 0.145     | 0.500     | 0.520     | 0.435     |
-| Cardinality      | 0.178     | 0.609     | 0.711     | 0.567     |
-| Tuple Constraint | 0.065     | 0.300     | 0.330     | 0.247     |
-| **AVG-Score**    | **0.129** | **0.469** | **0.521** | **0.416** |
-| #Tokens (M)      | 2.078     | 0.378     | 0.366     | 0.515     |
+| F1-Cell          | 0.233     | 0.500     | 0.520     | 0.435     |
+| Cardinality      | 0.288     | 0.609     | 0.711     | 0.567     |
+| Tuple Constraint | 0.105     | 0.300     | 0.330     | 0.247     |
+| **AVG-Score**    | **0.209** | **0.469** | **0.521** | **0.416** |
+| #Tokens (M)      | 3.780     | 0.378     | 0.366     | 0.515     |
 | Avg Time (s)     | 143.971   | 28.836    | 29.535    | 77.247    |
 
