@@ -1,6 +1,6 @@
 # Fdb version 4
-["pdflatex"] 1766698414.96463 "/Users/nothingtodo/pathX/reports_pathx/HW3/23Dec_PATHX.tex" "23Dec_PATHX.pdf" "23Dec_PATHX" 1766698415.39408 0
-  "/Users/nothingtodo/pathX/reports_pathx/HW3/23Dec_PATHX.tex" 1766698414.76593 38825 bcd2d620d2758da7e2b72077bc4760f5 ""
+["pdflatex"] 1766744649.22145 "/Users/nothingtodo/pathX/reports_pathx/HW3/23Dec_PATHX.tex" "23Dec_PATHX.pdf" "23Dec_PATHX" 1766744649.71073 0
+  "/Users/nothingtodo/pathX/reports_pathx/HW3/23Dec_PATHX.tex" 1766744649.03123 41979 b47640f3cefcc6e9d460d372b5162242 ""
   "/usr/local/texlive/2025/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc" 1136849721 2900 1537cc8184ad1792082cd229ecc269f4 ""
   "/usr/local/texlive/2025/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/local/texlive/2025/texmf-dist/fonts/tfm/jknappen/ec/tcrm1095.tfm" 1136768653 1536 02c06700a42be0f5a28664c7273f82e7 ""
@@ -95,10 +95,10 @@
   "/usr/local/texlive/2025/texmf-var/fonts/map/pdftex/updmap/pdftex.map" 1761821760 5467155 19efa205003f9ecad95fbbaa6ff24da1 ""
   "/usr/local/texlive/2025/texmf-var/web2c/pdftex/pdflatex.fmt" 1761821728 3345738 002ce83349924cefad3c7f2e8b9bc4c1 ""
   "/usr/local/texlive/2025/texmf.cnf" 1741450484 577 418a7058ec8e006d8704f60ecd22c938 ""
-  "23Dec_PATHX.aux" 1766698415.35057 9104 caa2c3d8be49e6f560096c96f4f6714a "pdflatex"
-  "23Dec_PATHX.out" 1766698415.35146 7273 d0aa0310ce5187893a7a7d4ebc5e6840 "pdflatex"
-  "23Dec_PATHX.tex" 1766698414.76593 38825 bcd2d620d2758da7e2b72077bc4760f5 ""
-  "23Dec_PATHX.toc" 1766698415.35168 3641 c67f85e4fffedf7aa27fe686d5705836 "pdflatex"
+  "23Dec_PATHX.aux" 1766744649.66225 9218 c07a343c2201386fbde1b319c47ac286 "pdflatex"
+  "23Dec_PATHX.out" 1766744649.66299 7383 b6c9ccc1ffb3cbc7d3310af870eca601 "pdflatex"
+  "23Dec_PATHX.tex" 1766744649.03123 41979 b47640f3cefcc6e9d460d372b5162242 ""
+  "23Dec_PATHX.toc" 1766744649.66322 3714 7ec09973881064b29bc1d880a4e6fd0e "pdflatex"
   (generated)
   "23Dec_PATHX.aux"
   "23Dec_PATHX.log"
