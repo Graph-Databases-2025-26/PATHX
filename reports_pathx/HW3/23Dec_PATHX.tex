@@ -493,16 +493,15 @@ Unless stated otherwise, the main evaluation metric is the \textit{AVG-Score}, d
 In this experiment, we evaluate the overall performance of the GALOIS variants against the NL, SQL, and GALOIS baselines using the Llama-3.3-70B model.
 This experiment provides a global comparison across all queries and datasets without conditioning on query structure or semantics.
 
-Table~\ref{tab:exp1_overall_results} reports our replication of Table~3 from the original paper, presenting the results obtained in our implementation.
+Table~\ref{tab:exp1_overall_results} reports our replication of Table~3 from the original paper which is presented in Table~\ref{tab:galois_table3}, presenting the results obtained in our implementation.
 
 \begin{table}[htbp]
 \centering
-\caption{Overall performance comparison between baselines and GALOIS variants (Experiment 1)}
+\caption{Overall performance comparison between baselines and GALOIS variants}
 \label{tab:exp1_overall_results}
 \begin{tabular}{lcccccc}
 \hline
 Metric 
-& SQL 
 & NL 
 & GALOIS\_WO 
 & GALOIS\_S 
@@ -510,52 +509,111 @@ Metric
 & GALOIS\_F \\
 \hline
 F1-Cell       
-& \textit{0.396}
-& 0.373
-& 0.157
-& 0.312
-& \textbf{0.529}
-& 0.256 \\
+& 0.315
+& 0.233
+& 0.500
+& \textbf{0.520}
+& 0.435 \\
 
 Cardinality   
-& \textit{0.659}
-& 0.541
-& 0.186
-& 0.384
-& \textbf{0.734}
-& 0.311 \\
+& 0.517
+& 0.288
+& 0.609
+& \textbf{0.711}
+& 0.567 \\
 
 Tuple Constr. 
-& \textit{0.195}
-& 0.155
-& 0.063
-& 0.182
-& \textbf{0.317}
-& 0.136 \\
+& 0.116
+& 0.105
+& 0.300
+& \textbf{0.330}
+& 0.247 \\
 
 AVG-Score     
-& \textit{0.417}
-& 0.356
-& 0.135
-& 0.293
-& \textbf{0.527}
-& 0.234 \\
+& 0.316
+& 0.209
+& 0.469
+& \textbf{0.521}
+& 0.416 \\
 
 \#Tokens (M)  
-& \textbf{0.171}
-& \textit{0.293}
-& 1.775
-& 0.205
-& 0.307
-& 0.254 \\
+& \textbf{0.191}
+& 2.078
+& 0.378
+& 0.366
+& 0.515 \\
 
 Avg Time (s)  
-& \textbf{11.000}
-& \textit{22.816}
-& 136.736
-& 18.305
-& 29.076
-& 52.374 \\
+& \textbf{20.304}
+& 232.374
+& 28.836
+& 29.535
+& 77.247 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{results of Table 3 in GALOIS paper}
+\label{tab:galois_table3}
+\begin{tabular}{lcccccc}
+\hline
+\textbf{Metric} 
+& \textbf{NL} 
+& \textbf{SQL} 
+& \textbf{GALOIS$_{WO}$} 
+& \textbf{GALOIS$_S$} 
+& \textbf{GALOIS$_A$} 
+& \textbf{GALOIS$_F$} \\
+\hline
+F1-Cell
+& 0.237
+& 0.431
+& 0.518
+& 0.480
+& \textit{0.543}
+& \textbf{0.563} \\
+
+Cardinality
+& 0.462
+& 0.659
+& 0.691
+& 0.655
+& 0.799
+& \textbf{0.835} \\
+
+Tuple Constr.
+& 0.065
+& 0.351
+& 0.389
+& 0.365
+& \textit{0.448}
+& \textbf{0.464} \\
+
+AVG-Score
+& 0.254
+& 0.481
+& 0.531
+& 0.500
+& \textit{0.592}
+& \textbf{0.622} \\
+
+\#Tokens (M)
+& \textbf{0.83}
+& 0.33
+& 19.71
+& 0.96
+& 0.95
+& \textit{1.72} \\
+
+Avg Time (s)
+& 120
+& \textit{61.4}
+& 1460
+& 130
+& 120.5
+& \textbf{47.4} \\
 \hline
 \end{tabular}
 \end{table}
@@ -581,19 +639,33 @@ We compare three logical strategies:
 (iii) \textbf{GALOIS\_F}, which selectively pushes down only those predicates deemed reliable by the estimator.
 
 We report AVG-Score as a measure of answer quality and total token consumption as a proxy for execution cost.
-Table~\ref{tab:exp2_optimizations} summarizes the results.
+Table~\ref{tab:logical_optimization_reformatted} summarizes the results.
 
 \begin{table}[htbp]
 \centering
 \caption{Effect of logical optimization strategies}
-\label{tab:exp2_optimizations}
-\begin{tabular}{lcc}
+\label{tab:logical_optimization_reformatted}
+\begin{tabular}{lccc}
 \hline
-Strategy & AVG-Score & Tokens (M) \\
+\textbf{Metric} & \textbf{No-Push} & \textbf{GALOIS$_A$} & \textbf{GALOIS$_F$} \\
 \hline
-NO-PUSH     & 0.631 & 0.178 \\
-GALOIS\_A   & 0.579 & 0.098 \\
-GALOIS\_F   & \textbf{0.699} & \textbf{0.090} \\
+AVG-Score     & 0.631 & 0.579 & \textbf{0.699} \\
+\#Tokens in M & 0.178 & 0.098 & \textbf{0.090} \\
+\hline
+\end{tabular}
+\end{table}
+
+
+\begin{table}[htbp]
+\centering
+\caption{results of Table 4 in GALOIS paper.}
+\label{tab:logical_optimization}
+\begin{tabular}{lccc}
+\hline
+\textbf{Metric} & \textbf{No-Push} & \textbf{GALOIS$_A$} & \textbf{GALOIS$_F$} \\
+\hline
+AVG-Score      & 0.637 & 0.598 & \textbf{0.708} \\
+\#Tokens in M  & 0.175 & 0.097 & \textbf{0.092} \\
 \hline
 \end{tabular}
 \end{table}
@@ -674,6 +746,69 @@ Cell-level precision and recall are then computed against ground truth using the
 \label{fig:threshold_pr}
 \end{figure}
 
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.85\textwidth,
+    height=6.5cm,
+    title={Precision and Recall vs. Confidence Threshold},
+    xlabel={Confidence threshold $p$},
+    ylabel={Score},
+    xmin=0.58, xmax=1.1,
+    ymin=0.54, ymax=0.67,
+    xtick={0.6,0.7,0.8,0.9,1.0,1.05},
+    xticklabels={0.6,0.7,0.8,0.9,0.99,0.995},
+    grid=both,
+    grid style={densely dotted},
+    legend style={
+        at={(0.02,0.02)},
+        anchor=south west,
+        font=\small
+    },
+    tick label style={font=\small},
+    label style={font=\small},
+    title style={font=\small},
+]
+
+% Precision
+\addplot[
+    color=blue,
+    mark=*,
+    thick
+] coordinates {
+    (0.6,0.62)
+    (0.7,0.61)
+    (0.8,0.61)
+    (0.9,0.64)
+    (1.0,0.65)
+    (1.05,0.66)
+};
+
+% Recall
+\addplot[
+    color=orange,
+    mark=square*,
+    thick
+] coordinates {
+    (0.6,0.63)
+    (0.7,0.62)
+    (0.8,0.61)
+    (0.9,0.60)
+    (1.0,0.55)
+    (1.05,0.545)
+};
+
+\addlegendentry{Precision}
+\addlegendentry{Recall}
+
+\end{axis}
+\end{tikzpicture}
+\caption{Precision and recall as a function of the confidence threshold $p$ applied to LLM output probabilities.}
+\label{fig:threshold_pr}
+\end{figure}
+
+
 
 Intuitively, one would expect a classic precision–recall trade‑off: increasing the confidence threshold should only keep the tuples with higher predicted confidence, eliminating many false positives and increasing precision, but at the cost of removing some true positives and so decreasing recall. However, the results in Figure~\ref{fig:threshold_pr} don't follow this pattern. Recall stays relatively high and varies only moderately across thresholds, while precision remains consistently lower and increases only slightly as \(p\) grows. We do not observe a clear monotonic rise in precision accompanied by a corresponding drop in recall.
 
@@ -689,7 +824,7 @@ Table~\ref{tab:exp4_country} reports quality results in terms of AVG-Score when 
 
 \begin{table}[htbp]
 \centering
-\caption{Quality results (AVG-Score) by country category (Experiment~4)}
+\caption{Quality results (AVG-Score) by country category}
 \label{tab:exp4_country}
 \begin{tabular}{lccccc}
 \hline
@@ -714,7 +849,7 @@ Presidents--Venezuela
 
 \begin{table}[htbp]
 \centering
-\caption{Quality results (AVG-Score) by temporal category (Experiment~4)}
+\caption{Quality results (AVG-Score) by temporal category}
 \label{tab:exp4_time}
 \begin{tabular}{lccccc}
 \hline
@@ -740,6 +875,35 @@ All-Time
 & 0.695
 & \textit{0.716}
 & \textbf{0.848} \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Results of table 6 in GALOIS paper}
+\label{tab:presidents_results}
+\begin{tabular}{lccccc}
+\hline
+\textbf{Dataset} & \textbf{NL} & \textbf{SQL} & \textbf{GALOIS$_{WO}$} & \textbf{GALOIS$_A$} & \textbf{GALOIS$_F$} \\
+\hline
+Presidents-USA        & 0.263 & 0.546 & 0.733 & 0.782 & \textbf{0.862} \\
+Presidents-Venezuela  & 0.203 & 0.285 & 0.411 & 0.425 & \textbf{0.482} \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Results of table 7 in GALOIS paper}
+\label{tab:temporal_results}
+\begin{tabular}{lccccc}
+\hline
+\textbf{Dataset} & \textbf{NL} & \textbf{SQL} & \textbf{GALOIS$_{WO}$} & \textbf{GALOIS$_A$} & \textbf{GALOIS$_F$} \\
+\hline
+Recent     & 0.209 & 0.398 & 0.531 & 0.584 & \textbf{0.623} \\
+Past       & 0.171 & 0.305 & 0.469 & 0.518 & \textbf{0.548} \\
+All-Time   & 0.325 & 0.562 & 0.703 & 0.722 & \textbf{0.857} \\
 \hline
 \end{tabular}
 \end{table}
