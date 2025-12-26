@@ -564,27 +564,47 @@ Avg Time (s)
 
 In the results, we observe that the optimized GALOIS variants consistently outperform the NL and SQL baselines in terms of AVG-Score, confirming the effectiveness of structured execution strategies over monolithic prompting.
 
-\subsection{Experiment 2: Effectiveness of the Optimizations}
+\subsection{Experiment 2: Impact of Logical Optimization}
+In this section, we evaluate the impact of logical optimization strategies in \textsc{GALOIS} using the \textsc{GEO} dataset.
 
-Experiment~2 evaluates the effectiveness of both logical and physical optimizations in GALOIS.
-For each query, a confidence estimator selects candidate \texttt{WHERE} predicates for pushdown, after which three physical strategies are evaluated: a fixed \textit{Table-Scan}, a fixed \textit{Key-Scan}, and an \textit{automatic} strategy that dynamically selects between them.
-In addition, we compare three logical pushdown policies: no pushdown, full pushdown, and confidence-based selective pushdown.
+All experiments use \textsc{LLaMA-3.1-70B} as the underlying language model.
+Answer quality is measured using AVG-Score, which reflects the correctness of generated query results, while execution cost is approximated by the total number of tokens consumed during query execution.
 
-Results are reported in Table~\ref{tab:exp2_optimizations}, including both AVG-Score and the number of generated tokens.
+To isolate the effect of logical optimization, the physical execution plan is fixed (Table scan) for all queries, and only the logical predicate pushdown strategy is varied.
+This controlled setup ensures that observed differences in answer quality and efficiency are attributable solely to logical optimization decisions.
+
+We examine how different predicate pushdown strategies affect answer quality and execution cost in \textsc{GALOIS}.
+For each query, a confidence estimator determines whether individual \texttt{WHERE} predicates should be pushed down to the language model.
+We compare three logical strategies:
+(i) \textbf{NO-PUSH}, in which all predicates are applied after the language model generates results;
+(ii) \textbf{GALOIS\_A}, which pushes down all available predicates without filtering; and
+(iii) \textbf{GALOIS\_F}, which selectively pushes down only those predicates deemed reliable by the estimator.
+
+We report AVG-Score as a measure of answer quality and total token consumption as a proxy for execution cost.
+Table~\ref{tab:exp2_optimizations} summarizes the results.
 
 \begin{table}[htbp]
 \centering
-\caption{Effectiveness of logical and physical optimizations (Experiment~2)}
+\caption{Effect of logical optimization strategies}
 \label{tab:exp2_optimizations}
-\begin{tabular}{lcccccc}
+\begin{tabular}{lcc}
 \hline
-Metric & NO-PUSH & GALOIS\_A & GALOIS\_F \\
+Strategy & AVG-Score & Tokens (M) \\
 \hline
-AVG-Score      & 0.631 & \textit{0.579} & \textbf{0.699} \\
-\#Tokens (M)   & 0.178 & \textit{0.098} & \textbf{0.090} \\
+NO-PUSH     & 0.631 & 0.178 \\
+GALOIS\_A   & 0.579 & 0.098 \\
+GALOIS\_F   & \textbf{0.699} & \textbf{0.090} \\
 \hline
 \end{tabular}
 \end{table}
+
+The results show that indiscriminately pushing down all predicates (\textbf{GALOIS\_A}) reduces token usage but leads to a substantial degradation in answer quality.
+This indicates that unreliable predicates can overconstrain the language model and hinder its reasoning process.
+In contrast, confidence-based predicate pushdown (\textbf{GALOIS\_F}) achieves the highest answer quality while also minimizing execution cost among the evaluated strategies.
+
+Confidence-aware logical optimization enables \textsc{GALOIS} to outperform both aggressive pushdown and no-push baselines, achieving higher answer quality with lower token consumption.
+
+
 
 \subsection{Experiment 3: Impact of LLM Parameters}
 
