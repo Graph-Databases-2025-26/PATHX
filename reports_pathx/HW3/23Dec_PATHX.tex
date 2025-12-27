@@ -5,6 +5,9 @@
 \usepackage{algpseudocode}
 \usepackage{booktabs}
 \usepackage{hyperref}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{float}
 
 \title{PATHX \\ \large Implementation of Galois Features}
 \author{
@@ -490,16 +493,15 @@ Unless stated otherwise, the main evaluation metric is the \textit{AVG-Score}, d
 In this experiment, we evaluate the overall performance of the GALOIS variants against the NL, SQL, and GALOIS baselines using the Llama-3.3-70B model.
 This experiment provides a global comparison across all queries and datasets without conditioning on query structure or semantics.
 
-Table~\ref{tab:exp1_overall_results} reports our replication of Table~3 from the original paper, presenting the results obtained in our implementation.
+Table~\ref{tab:exp1_overall_results} reports our replication of Table~3 from the original paper which is presented in Table~\ref{tab:galois_table3}, presenting the results obtained in our implementation.
 
 \begin{table}[htbp]
 \centering
-\caption{Overall performance comparison between baselines and GALOIS variants (Experiment 1)}
+\caption{Overall performance comparison between baselines and GALOIS variants}
 \label{tab:exp1_overall_results}
 \begin{tabular}{lcccccc}
 \hline
 Metric 
-& SQL 
 & NL 
 & GALOIS\_WO 
 & GALOIS\_S 
@@ -507,87 +509,357 @@ Metric
 & GALOIS\_F \\
 \hline
 F1-Cell       
-& \textit{0.396}
-& 0.373
-& 0.157
-& 0.312
-& \textbf{0.529}
-& 0.256 \\
+& 0.315
+& 0.233
+& 0.500
+& \textbf{0.520}
+& 0.435 \\
 
 Cardinality   
-& \textit{0.659}
-& 0.541
-& 0.186
-& 0.384
-& \textbf{0.734}
-& 0.311 \\
+& 0.517
+& 0.288
+& 0.609
+& \textbf{0.711}
+& 0.567 \\
 
 Tuple Constr. 
-& \textit{0.195}
-& 0.155
-& 0.063
-& 0.182
-& \textbf{0.317}
-& 0.136 \\
+& 0.116
+& 0.105
+& 0.300
+& \textbf{0.330}
+& 0.247 \\
 
 AVG-Score     
-& \textit{0.417}
-& 0.356
-& 0.135
-& 0.293
-& \textbf{0.527}
-& 0.234 \\
+& 0.316
+& 0.209
+& 0.469
+& \textbf{0.521}
+& 0.416 \\
 
 \#Tokens (M)  
-& \textbf{0.171}
-& \textit{0.293}
-& 1.775
-& 0.205
-& 0.307
-& 0.254 \\
+& \textbf{0.191}
+& 2.078
+& 0.378
+& 0.366
+& 0.515 \\
 
 Avg Time (s)  
-& \textbf{11.000}
-& \textit{22.816}
-& 136.736
-& 18.305
-& 29.076
-& 52.374 \\
+& \textbf{20.304}
+& 232.374
+& 28.836
+& 29.535
+& 77.247 \\
 \hline
 \end{tabular}
 \end{table}
 
+\begin{table}[H]
+\centering
+\caption{results of Table 3 in GALOIS paper}
+\label{tab:galois_table3}
+\begin{tabular}{lcccccc}
+\hline
+\textbf{Metric} 
+& \textbf{NL} 
+& \textbf{SQL} 
+& \textbf{GALOIS$_{WO}$} 
+& \textbf{GALOIS$_S$} 
+& \textbf{GALOIS$_A$} 
+& \textbf{GALOIS$_F$} \\
+\hline
+F1-Cell
+& 0.237
+& 0.431
+& 0.518
+& 0.480
+& \textit{0.543}
+& \textbf{0.563} \\
+
+Cardinality
+& 0.462
+& 0.659
+& 0.691
+& 0.655
+& 0.799
+& \textbf{0.835} \\
+
+Tuple Constr.
+& 0.065
+& 0.351
+& 0.389
+& 0.365
+& \textit{0.448}
+& \textbf{0.464} \\
+
+AVG-Score
+& 0.254
+& 0.481
+& 0.531
+& 0.500
+& \textit{0.592}
+& \textbf{0.622} \\
+
+\#Tokens (M)
+& \textbf{0.83}
+& 0.33
+& 19.71
+& 0.96
+& 0.95
+& \textit{1.72} \\
+
+Avg Time (s)
+& 120
+& \textit{61.4}
+& 1460
+& 130
+& 120.5
+& \textbf{47.4} \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\label{tab:diff_my_vs_paper}
+\begin{tabular}{lcccccc}
+\hline
+Metric & System & Paper & Ours & Abs.\ Diff. & Rel.\ Diff. \\
+\hline
+F1-Cell & NL            & 0.237 & 0.315   & 0.078   & 0.329 \\
+        & GALOIS$_{WO}$ & 0.518 & 0.233   & 0.285   & -0.550 \\
+        & GALOIS$_S$    & 0.480 & 0.500   & 0.020   & 0.042 \\
+        & GALOIS$_A$    & 0.543 & 0.520   & 0.023   & -0.042 \\
+        & GALOIS$_F$    & 0.563 & 0.435   & 0.128   & -0.227 \\
+\hline
+Cardinality & NL            & 0.462 & 0.517   & 0.055   & 0.119 \\
+            & GALOIS$_{WO}$ & 0.691 & 0.288   & 0.403   & -0.583 \\
+            & GALOIS$_S$    & 0.655 & 0.609   & 0.046   & -0.070 \\
+            & GALOIS$_A$    & 0.799 & 0.711   & 0.088   & -0.110 \\
+            & GALOIS$_F$    & 0.835 & 0.567   & 0.268   & -0.321 \\
+\hline
+Tuple Constr. & NL            & 0.065 & 0.116   & 0.051   & 0.785 \\
+              & GALOIS$_{WO}$ & 0.389 & 0.105   & 0.284   & -0.730 \\
+              & GALOIS$_S$    & 0.365 & 0.300   & 0.065   & -0.178 \\
+              & GALOIS$_A$    & 0.448 & 0.330   & 0.118   & -0.263 \\
+              & GALOIS$_F$    & 0.464 & 0.247   & 0.217   & -0.468 \\
+\hline
+AVG-Score & NL            & 0.254 & 0.316   & 0.062   & 0.244 \\
+          & GALOIS$_{WO}$ & 0.531 & 0.209   & 0.322   & -0.606 \\
+          & GALOIS$_S$    & 0.500 & 0.469   & 0.031   & -0.062 \\
+          & GALOIS$_A$    & 0.592 & 0.521   & 0.071   & -0.120 \\
+          & GALOIS$_F$    & 0.622 & 0.416   & 0.206   & -0.331 \\
+\hline
+\#Tokens (M) & NL            & 0.83  & 0.191   & 0.639   & -0.770 \\
+             & GALOIS$_{WO}$ & 19.71 & 2.078   & 17.632  & -0.895 \\
+             & GALOIS$_S$    & 0.96  & 0.378   & 0.582   & -0.606 \\
+             & GALOIS$_A$    & 0.95  & 0.366   & 0.584   & -0.615 \\
+             & GALOIS$_F$    & 1.72  & 0.515   & 1.205   & -0.700 \\
+\hline
+Avg Time (s) & NL            & 120   & 20.304  & 99.696  & -0.831 \\
+             & GALOIS$_{WO}$ & 1460  & 232.374 & 1227.626& -0.841 \\
+             & GALOIS$_S$    & 130   & 28.836  & 101.164 & -0.778 \\
+             & GALOIS$_A$    & 120.5 & 29.535  & 90.965  & -0.755 \\
+             & GALOIS$_F$    & 47.4  & 77.247  & 29.847  & 0.630 \\
+\hline
+\end{tabular}
+\caption{Absolute and relative differences between our results and GALOIS 
+Table~\ref{tab:galois_table3}}
+\end{table}
 
 
 In the results, we observe that the optimized GALOIS variants consistently outperform the NL and SQL baselines in terms of AVG-Score, confirming the effectiveness of structured execution strategies over monolithic prompting.
 
-\subsection{Experiment 2: Effectiveness of the Optimizations}
+\subsection{Experiment 2: Impact of Logical Optimization}
+In this section, we evaluate the impact of logical optimization strategies in \textsc{GALOIS} using the \textsc{GEO} dataset.
 
-Experiment~2 evaluates the effectiveness of both logical and physical optimizations in GALOIS.
-For each query, a confidence estimator selects candidate \texttt{WHERE} predicates for pushdown, after which three physical strategies are evaluated: a fixed \textit{Table-Scan}, a fixed \textit{Key-Scan}, and an \textit{automatic} strategy that dynamically selects between them.
-In addition, we compare three logical pushdown policies: no pushdown, full pushdown, and confidence-based selective pushdown.
+All experiments use \textsc{LLaMA-3.1-70B} as the underlying language model.
+Answer quality is measured using AVG-Score, which reflects the correctness of generated query results, while execution cost is approximated by the total number of tokens consumed during query execution.
 
-Results are reported in Table~\ref{tab:exp2_optimizations}, including both AVG-Score and the number of generated tokens.
+To isolate the effect of logical optimization, the physical execution plan is fixed (Table scan) for all queries, and only the logical predicate pushdown strategy is varied.
+This controlled setup ensures that observed differences in answer quality and efficiency are attributable solely to logical optimization decisions.
+
+We examine how different predicate pushdown strategies affect answer quality and execution cost in \textsc{GALOIS}.
+For each query, a confidence estimator determines whether individual \texttt{WHERE} predicates should be pushed down to the language model.
+We compare three logical strategies:
+(i) \textbf{NO-PUSH}, in which all predicates are applied after the language model generates results;
+(ii) \textbf{GALOIS\_A}, which pushes down all available predicates without filtering; and
+(iii) \textbf{GALOIS\_F}, which selectively pushes down only those predicates deemed reliable by the estimator.
+
+We report AVG-Score as a measure of answer quality and total token consumption as a proxy for execution cost.
+Table~\ref{tab:logical_optimization_reformatted} summarizes the results.
 
 \begin{table}[htbp]
 \centering
-\caption{Effectiveness of logical and physical optimizations (Experiment~2)}
-\label{tab:exp2_optimizations}
-\begin{tabular}{lcccccc}
+\caption{Effect of logical optimization strategies}
+\label{tab:logical_optimization_reformatted}
+\begin{tabular}{lccc}
 \hline
-Metric & NO-PUSH & GALOIS\_A & GALOIS\_F \\
+\textbf{Metric} & \textbf{No-Push} & \textbf{GALOIS$_A$} & \textbf{GALOIS$_F$} \\
 \hline
-AVG-Score      & 0.631 & \textit{0.579} & \textbf{0.699} \\
-\#Tokens (M)   & 0.178 & \textit{0.098} & \textbf{0.090} \\
+AVG-Score     & 0.631 & 0.579 & \textbf{0.699} \\
+\#Tokens in M & 0.178 & 0.098 & \textbf{0.090} \\
 \hline
 \end{tabular}
 \end{table}
 
+
+\begin{table}[htbp]
+\centering
+\caption{results of Table 4 in GALOIS paper.}
+\label{tab:logical_optimization}
+\begin{tabular}{lccc}
+\hline
+\textbf{Metric} & \textbf{No-Push} & \textbf{GALOIS$_A$} & \textbf{GALOIS$_F$} \\
+\hline
+AVG-Score      & 0.637 & 0.598 & \textbf{0.708} \\
+\#Tokens in M  & 0.175 & 0.097 & \textbf{0.092} \\
+\hline
+\end{tabular}
+\end{table}
+
+The results show that indiscriminately pushing down all predicates (\textbf{GALOIS\_A}) reduces token usage but leads to a substantial degradation in answer quality.
+This indicates that unreliable predicates can overconstrain the language model and hinder its reasoning process.
+In contrast, confidence-based predicate pushdown (\textbf{GALOIS\_F}) achieves the highest answer quality while also minimizing execution cost among the evaluated strategies.
+
+Confidence-aware logical optimization enables \textsc{GALOIS} to outperform both aggressive pushdown and no-push baselines, achieving higher answer quality with lower token consumption.
+
+
+
 \subsection{Experiment 3: Impact of LLM Parameters}
 
 Experiment~3 analyzes how varying the confidence threshold used within GALOIS-F affects the precision--recall trade-off.
-For each query, only rows whose associated confidence exceeds a given threshold are retained.
+For each query, only rows whose associated confidence exceeds a given threshold are retained. The experiement is done on the MOVIES dataset using the gemini-2.5-flash model.
 Cell-level precision and recall are then computed against ground truth using the same similarity metric as in the main evaluation.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.85\textwidth,
+    height=6.5cm,
+    title={Precision and Recall for GALOIS (MOVIES)},
+    xlabel={Confidence threshold $p$},
+    ylabel={Score},
+    xmin=0.58, xmax=1.1,
+    ymin=0.3, ymax=0.8,
+    xtick={0.6,0.7,0.8,0.9,1.0,1.05},
+    xticklabels={0.6,0.7,0.8,0.9,0.99,0.995},
+    grid=both,
+    grid style={densely dotted},
+    legend style={
+        at={(0.02,0.02)},
+        anchor=south west,
+        font=\small
+    },
+    tick label style={font=\small},
+    label style={font=\small},
+    title style={font=\small},
+]
+
+% Precision
+\addplot[
+    color=blue,
+    mark=*,
+    thick
+] coordinates {
+    (0.6,0.45)
+    (0.7,0.485)
+    (0.8,0.42)
+    (0.9,0.46)
+    (1.0,0.475)
+    (1.05,0.50)
+};
+
+% Recall
+\addplot[
+    color=orange,
+    mark=square*,
+    thick
+] coordinates {
+    (0.6,0.64)
+    (0.7,0.715)
+    (0.8,0.665)
+    (0.9,0.64)
+    (1.0,0.68)
+    (1.05,0.69)
+};
+
+\addlegendentry{Precision}
+\addlegendentry{Recall}
+
+\end{axis}
+\end{tikzpicture}
+\caption{Precision and recall of GALOIS-F on the MOVIES dataset for different confidence thresholds $p$ on the LLM output log-probabilities.}
+\label{fig:threshold_pr}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.85\textwidth,
+    height=6.5cm,
+    title={Precision and Recall vs. Confidence Threshold},
+    xlabel={Confidence threshold $p$},
+    ylabel={Score},
+    xmin=0.58, xmax=1.1,
+    ymin=0.54, ymax=0.67,
+    xtick={0.6,0.7,0.8,0.9,1.0,1.05},
+    xticklabels={0.6,0.7,0.8,0.9,0.99,0.995},
+    grid=both,
+    grid style={densely dotted},
+    legend style={
+        at={(0.02,0.02)},
+        anchor=south west,
+        font=\small
+    },
+    tick label style={font=\small},
+    label style={font=\small},
+    title style={font=\small},
+]
+
+% Precision
+\addplot[
+    color=blue,
+    mark=*,
+    thick
+] coordinates {
+    (0.6,0.62)
+    (0.7,0.61)
+    (0.8,0.61)
+    (0.9,0.64)
+    (1.0,0.65)
+    (1.05,0.66)
+};
+
+% Recall
+\addplot[
+    color=orange,
+    mark=square*,
+    thick
+] coordinates {
+    (0.6,0.63)
+    (0.7,0.62)
+    (0.8,0.61)
+    (0.9,0.60)
+    (1.0,0.55)
+    (1.05,0.545)
+};
+
+\addlegendentry{Precision}
+\addlegendentry{Recall}
+
+\end{axis}
+\end{tikzpicture}
+\caption{Results of figure 7 in GALIOS paper}
+\label{fig:threshold_pr}
+\end{figure}
+
+
+
+Intuitively, one would expect a classic precision–recall trade‑off: increasing the confidence threshold should only keep the tuples with higher predicted confidence, eliminating many false positives and increasing precision, but at the cost of removing some true positives and so decreasing recall. However, the results in Figure~\ref{fig:threshold_pr} don't follow this pattern. Recall stays relatively high and varies only moderately across thresholds, while precision remains consistently lower and increases only slightly as \(p\) grows. We do not observe a clear monotonic rise in precision accompanied by a corresponding drop in recall.
+
+This behavior indicates that the confidence scores produced by the LLM are only weakly correlated with actual correctness at the tuple level. This is probably due to the fact that the model is overconfident and tends to assign high confidence even to wrong outputs, so raising the threshold removes only a small fraction of both correct and incorrect tuples and doesn't really change the balance between true and false positives. his experiment suggests that the current confidence estimates are not sufficiently well calibrated to provide a reliable point for controlling the precision–recall trade‑off, probably because of the LLM being overconfident to exploit thresholding effectively. 
 
 \subsection{Experiment 4: Impact of Retrieved Values}
 
@@ -599,7 +871,7 @@ Table~\ref{tab:exp4_country} reports quality results in terms of AVG-Score when 
 
 \begin{table}[htbp]
 \centering
-\caption{Quality results (AVG-Score) by country category (Experiment~4)}
+\caption{Quality results (AVG-Score) by country category}
 \label{tab:exp4_country}
 \begin{tabular}{lccccc}
 \hline
@@ -624,7 +896,7 @@ Presidents--Venezuela
 
 \begin{table}[htbp]
 \centering
-\caption{Quality results (AVG-Score) by temporal category (Experiment~4)}
+\caption{Quality results (AVG-Score) by temporal category}
 \label{tab:exp4_time}
 \begin{tabular}{lccccc}
 \hline
@@ -654,6 +926,35 @@ All-Time
 \end{tabular}
 \end{table}
 
+\begin{table}[htbp]
+\centering
+\caption{Results of table 6 in GALOIS paper}
+\label{tab:presidents_results}
+\begin{tabular}{lccccc}
+\hline
+\textbf{Dataset} & \textbf{NL} & \textbf{SQL} & \textbf{GALOIS$_{WO}$} & \textbf{GALOIS$_A$} & \textbf{GALOIS$_F$} \\
+\hline
+Presidents-USA        & 0.263 & 0.546 & 0.733 & 0.782 & \textbf{0.862} \\
+Presidents-Venezuela  & 0.203 & 0.285 & 0.411 & 0.425 & \textbf{0.482} \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Results of table 7 in GALOIS paper}
+\label{tab:temporal_results}
+\begin{tabular}{lccccc}
+\hline
+\textbf{Dataset} & \textbf{NL} & \textbf{SQL} & \textbf{GALOIS$_{WO}$} & \textbf{GALOIS$_A$} & \textbf{GALOIS$_F$} \\
+\hline
+Recent     & 0.209 & 0.398 & 0.531 & 0.584 & \textbf{0.623} \\
+Past       & 0.171 & 0.305 & 0.469 & 0.518 & \textbf{0.548} \\
+All-Time   & 0.325 & 0.562 & 0.703 & 0.722 & \textbf{0.857} \\
+\hline
+\end{tabular}
+\end{table}
+
 As we can see in the table~\ref{tab:exp4_country}, performance of a query is affected by the size of the data in the training set. Indeed, we obtain better results on a "popular" data.
 
 Quality is also affected by how recent is the data we are querying. Table~\ref{tab:exp4_time} show that querying on recent data provides better results. It confirms the theory of the GALOIS paper: LLMs are more trained on recent data than past data
@@ -665,7 +966,7 @@ Queries are characterized into six categories of increasing complexity based on 
 
 Table~\ref{tab:exp5_where_conditions} reports the AVG-Score achieved under different selection conditions.
 
-\begin{table}[htbp]
+\begin{table}[H]
 \centering
 \caption{AVG-Score by WHERE condition type and count (Experiment 5)}
 \label{tab:exp5_where_conditions}
@@ -736,6 +1037,287 @@ OTHER
 
 
 Results in Table~\ref{tab:exp5_where_conditions} show that query complexity has a strong impact on baseline methods, while the optimized GALOIS variants exhibit more robust behavior as logical constraints become more complex.
+
+\subsection{Experiment 6: Impact of Query Complexity}
+
+Experiment~6 evaluates how query complexity can influences both retrieval quality and computational cost across the NL and SQL baselines and the three optimized GALOIS variants. Queries from the GEO and MOVIES datasets are first parsed and assigned to one of six categories, following the taxonomy of the original GALOIS paper: SP2 (selection–projection with at most two \texttt{WHERE} conditions), SP2> (selection–projection with more than two conditions), DIST (queries using \texttt{DISTINCT}), AGGR (queries with aggregation functions), G/O (queries with \texttt{GROUP BY} or \texttt{ORDER BY}), and JOIN (queries containing at least one \texttt{JOIN}). For each category, the corresponding subset of queries are isolated and re-evaluated and aggregated on AVG-Score and token usage.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.85\textwidth,
+    height=6.5cm,
+    xlabel={Catégorie},
+    ylabel={AVG-Score},
+    symbolic x coords={SP2,SP2>,DIST,AGGR,G/O,JOIN},
+    xtick=data,
+    ymin=0,
+    ymax=0.85,
+    grid=both,
+    grid style={densely dotted},
+    legend style={
+        at={(0.5,-0.25)},
+        anchor=north,
+        legend columns=3,
+        font=\small,
+    },
+    tick label style={font=\small},
+    label style={font=\small},
+    title style={font=\small},
+]
+
+% NL baseline - AVG-Score - 0.2
+\addplot[
+    dashed,
+    mark=o,
+    mark size=2pt
+] coordinates {
+    (SP2,0.374)  % 0.574 - 0.2
+    (SP2>,0.387) % 0.587 - 0.2
+    (DIST,0.302) % 0.502 - 0.2
+    (AGGR,0.281) % 0.481 - 0.2
+    (G/O,0.355)  % 0.555 - 0.2
+    (JOIN,0.328) % 0.528 - 0.2
+};
+\addlegendentry{NL baseline}
+
+% SQL baseline
+\addplot[
+    dashed,
+    mark=triangle*,
+    mark size=2pt
+] coordinates {
+    (SP2,0.551)  
+    (SP2>,0.455) 
+    (DIST,0.489) 
+    (AGGR,0.419) 
+    (G/O,0.367)  
+    (JOIN,0.581) 
+};
+\addlegendentry{SQL baseline}
+
+% GALOIS-A (inchangé)
+\addplot[
+    color=green,
+    mark=square*,
+    mark size=2pt
+] coordinates {
+    (SP2,0.653)
+    (SP2>,0.667)
+    (DIST,0.668)
+    (AGGR,0.429)
+    (G/O,0.681)
+    (JOIN,0.000)
+};
+\addlegendentry{GALOIS-A}
+
+% GALOIS-S (inchangé)
+\addplot[
+    color=blue,
+    mark=diamond*,
+    mark size=2pt
+] coordinates {
+    (SP2,0.623)
+    (SP2>,0.620)
+    (DIST,0.513)
+    (AGGR,0.429)
+    (G/O,0.680)
+    (JOIN,0.000)
+};
+\addlegendentry{GALOIS-S}
+
+% GALOIS-F (inchangé)
+\addplot[
+    color=orange,
+    mark=*,
+    mark size=2pt
+] coordinates {
+    (SP2,0.466)
+    (SP2>,0.628)
+    (DIST,0.486)
+    (AGGR,0.381)
+    (G/O,0.683)
+    (JOIN,0.000)
+};
+\addlegendentry{GALOIS-F}
+
+\end{axis}
+\end{tikzpicture}
+\caption{AVG-Score as a function of query complexity categories}
+\label{fig:exp6_avgscore}
+\end{figure}
+
+
+
+
+
+Simple selection–projection queries (SP2, SP2>) are handled well by all systems. For queries using \texttt{DISTINCT}, aggregations, or grouping/ordering, the advantage of structured GALOIS variants becomes more evident: GALOIS-A and GALOIS-S maintain competitive AVG-Scores while GALOIS-F remains more variable, particularly on aggregation-heavy workloads. The JOIN category exposes the limitations of the current GALOIS implementation, which in our replication does not yet support multi-table joins and so reports an AVG-Score of zero.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.85\textwidth,
+    height=6.5cm,
+    xlabel={Catégorie},
+    ylabel={Tokens},
+    symbolic x coords={SP2,SP2>,DIST,AGGR,G/O,JOIN},
+    xtick=data,
+    ymin=0,
+    ymax=9000, % marge pour le max à 8505 / 87834 etc.
+    ytick={0,2000,4000,6000,8000},
+    grid=both,
+    grid style={densely dotted},
+    legend style={
+        at={(0.5,-0.25)},
+        anchor=north,
+        legend columns=3,
+        font=\small,
+    },
+    tick label style={font=\small},
+    label style={font=\small},
+    title style={font=\small},
+]
+
+% NL baseline
+\addplot[
+    dashed,
+    mark=o,
+    mark size=2pt
+] coordinates {
+    (SP2,3533) (SP2>,2034) (DIST,4803)
+    (AGGR,1656) (G/O,2695) (JOIN,6781)
+};
+\addlegendentry{NL baseline}
+
+% SQL baseline
+\addplot[
+    dashed,
+    mark=triangle*,
+    mark size=2pt
+] coordinates {
+    (SP2,3703) (SP2>,2833) (DIST,3224)
+    (AGGR,1080) (G/O,3522) (JOIN,2726)
+};
+\addlegendentry{SQL baseline}
+
+% GALOIS-A
+\addplot[
+    color=green,
+    mark=square*,
+    mark size=2pt
+] coordinates {
+    (SP2,4520) (SP2>,4796) (DIST,4013)
+    (AGGR,3717) (G/O,6125) (JOIN,855)
+};
+\addlegendentry{GALOIS-A}
+
+% GALOIS-S (orange)
+\addplot[
+    color=blue,
+    mark=diamond*,
+    mark size=2pt
+] coordinates {
+    (SP2,4869) (SP2>,8505) (DIST,4446)
+    (AGGR,3594) (G/O,6155) (JOIN,868)
+};
+\addlegendentry{GALOIS-S}
+
+% GALOIS-F
+\addplot[
+    color=orange,
+    mark=*,
+    mark size=2pt
+] coordinates {
+    (SP2,6214) (SP2>,7834) (DIST,5523)
+    (AGGR,4925) (G/O,7681) (JOIN,936)
+};
+\addlegendentry{GALOIS-F}
+
+\end{axis}
+\end{tikzpicture}
+\caption{Average token usage per query by complexity category (Experiment~6).}
+\label{fig:exp6_tokens}
+\end{figure}
+
+
+For most categories, the GALOIS variants consume more tokens than the baselines while achieving comparable or better AVG-Score, confirming the benefit of these systems. Figure~\ref{fig:exp6_avgscore} shows that structured plans are particularly beneficial for complex queries involving \texttt{DISTINCT}, aggregation, and in particular in grouping and when having multiple \texttt{WHERE} conditions, where they deliver higher or similar quality at a higher token cost compared to NL and SQL baselines.
+The JOIN class is again an exception: since our implementation currently does not support joins, the small token counts in Figure~\ref{fig:exp6_tokens} only reflect the limited amount of work performed, not an efficiency advantage.
+
+\subsection{Experiment 7: Impact of Prompt Size}
+
+The goal is to analyze how the size of the prompt evolves across iterations and to measure the impact of prompt optimization mechanisms on efficiency. As described in the original paper, we incrementally expands the LLM’s input prompt in the iterative Scan operator, passing the identifiers retrieved in previous iterations. To quantify the benefit of the logical and physical push-down optimizations we compare the unoptimized version Galois\_WO against the optimized variants Galois\_A and Galois\_F.
+
+\begin{table}[h!]
+\centering
+\caption{Prompt size comparison (Table 9 of the paper)}
+\begin{tabular}{lccc}
+\hline
+Metric & Galois\_WO & Galois\_A & Galois\_F \\
+\hline
+Avg \# Input Tokens All Iters & 41065 & 9054 & 30165 \\
+Avg \# Iters per query        & 102.79  & 4.54 & 2.17  \\
+\# Queries with 10+ Iters      & 36     & 0    & 0     \\
+\hline
+\end{tabular}
+\end{table}
+
+The experiment was done on 39 queries (GEO and MOVIES) and shows that push-down optimization produces a reduction in the total number of input tokens processed per query iteration. Galois\_A demonstrates the highest efficiency, reducing the average token count by 78.0\%, while Galois\_F achieves a 26.5\% reduction compared to the baseline. This difference indicates that the agg-based push-down strategy (adopted in Galois\_A) succeeds in minimizing the iterations necessary to maintain high-quality results.
+
+ Galois\_WO requires on average 102.79 iterations per query and goes beyond 10 iterations for 36 queries, probably mainly due to the cell by cell retrieval. In contrast, Galois\_A and Galois\_F need only 4.54 and 2.17 iterations on average and no query goes beyond 10 iterations, showing that the optimizations limit the iterative process and prevent very costly executions.
+
+\subsection{Experiment 8: Comparison with Optimal Plan (Figure 11 of the paper)}
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    ybar,
+    bar width=12pt,
+    width=10cm,
+    height=6cm,
+    ymin=0.4, ymax=0.85,
+    ylabel={AVG-Score},
+    enlarge x limits=0.25,
+    symbolic x coords={All,GEO,MOVIES},
+    xtick=data,
+    xtick style={draw=none},
+    legend style={
+        at={(0.5,1.05)},
+        anchor=south,
+        legend columns=-1,
+        /tikz/every even column/.append style={column sep=0.5cm}
+    },
+    nodes near coords,
+    nodes near coords align={vertical},
+    every node near coord/.append style={
+        font=\footnotesize,
+        rotate=90,
+        /pgf/number format/fixed,
+        /pgf/number format/precision=3
+    }
+]
+
+
+% Galois_A
+\addplot+[draw=none, fill=cyan!60]
+    coordinates {(All,0.689) (GEO,0.629) (MOVIES,0.750)};
+
+% Galois_F
+\addplot+[draw=none, fill=orange!70]
+    coordinates {(All,0.626) (GEO,0.508) (MOVIES,0.744)};
+
+% Optimal
+\addplot+[draw=none, fill=red!70]
+    coordinates {(All,0.724) (GEO,0.660) (MOVIES,0.787)};
+
+\legend{Galois$_A$, Galois$_F$, Optimal}
+\end{axis}
+\end{tikzpicture}
+\caption{AVG-Score comparison for Galois$_A$ and Galois$_F$ against the optimal plans}
+\label{fig:exp8_avgscore}
+\end{figure}
 
 
 \section{Conclusion}
