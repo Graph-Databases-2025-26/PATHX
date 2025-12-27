@@ -746,29 +746,28 @@ Results in Table~\ref{tab:exp5_where_conditions} show that query complexity has 
 \begin{itemize}
   \item \textbf{First deadline:} Designed and implemented the core database connection layer, including dataset loading, query execution, and persistent storage of results. Defined the overall project structure and integrated external dependencies and configuration files to support subsequent development phases. Added support of \texttt{EXPLAIN} and \texttt{EXPLAIN ANALYZE} queries to validate database behavior.
   \item \textbf{Second deadline:} Developed the SQL baseline, including SQL-oriented prompt templates and parsing workflows. Implemented multiple prompting strategies and integrated execution with DuckDB for result retrieval. Executed all SQL benchmark queries and produced standardized JSON outputs for downstream evaluation. Added support of Gemini and OpenAI LLM models.
-  \item \textbf{Third deadline:} ...
+  \item \textbf{Third deadline:} Implemented the two-phase retrieval workflow for key-based enumeration. Developed and integrated an iterative prompting mechanism to enable controlled multi-round tuple retrieval, and introduced dataset-aware context injection to improve completeness and stability of LLM responses. Implemented confidence- and selectivity-based predicate pushdown logic. Assisted in implementing and testing logical and physical planning decisions across GALOIS variants. Conducted experimental runs, analyzed results, and authored the GALOIS features.
 \end{itemize}
 
 \noindent\textbf{Bita Khashechian}
 \begin{itemize}
   \item \textbf{First deadline:} Contributed to the technical setup of the project by configuring dependencies, environment settings, and configuration files. Assisted in organizing the project structure and implementing data ingestion and serialization workflows. Added support of logging and debugging utilities.
   \item \textbf{Second deadline:} Implemented the Natural Language baseline, including prompt design, LLM invocation, and response parsing into a unified JSON format. Executed all NL benchmark queries and organized the resulting outputs. Ensured robustness of the NL baseline through retry mechanisms and validation of generated result files.
-  \item \textbf{Third deadline:} ...
+  \item \textbf{Third deadline:} Participated in the implementation and testing of LLM-based scan operators, including validation of \texttt{LLMScan} and \texttt{Filter--LLMScan} behaviors. Assisted in debugging prompt--response workflows and ensuring JSON consistency across GALOIS variants. Contributed to testing selective predicate pushdown strategies and reviewing intermediate outputs for correctness.
 \end{itemize}
 
 \noindent\textbf{Minseok Kim}
 \begin{itemize}
   \item \textbf{First deadline:} Worked on the initial database setup by implementing utilities for database connection and structured data access, including reading and writing intermediate results. Contributed to defining the early project structure and integrating core dependencies.
   \item \textbf{Second deadline:} Focused on the evaluation aspects of the NL and SQL baselines by executing the evaluation pipeline and normalizing baseline outputs for fair comparison. Generated aggregated evaluation results and analyzed deviations between the paper baselines and the replicated results.
-  \item \textbf{Third deadline:} ...
+  \item \textbf{Third deadline:} Designed and implemented the core GALOIS execution architecture, including logical and physical planning components. Implemented \texttt{LLMScan}, \texttt{Filter-LLMScan}, and \texttt{Key-Scan} operators. Contributed to the implementation and validation of core GALOIS execution components, with a focus on evaluation-oriented logic and integration of optimization outcomes into the experimental pipeline. realized all GALOIS variants (WO, A, S, F).
 \end{itemize}
 
 \noindent\textbf{Juliette Tonneau}
 \begin{itemize}
-  \item \textbf{First deadline:} Participated in the initial technical setup by assisting with database connectivity verification and data read/write workflows. Contributed to organizing configuration files and validating the project environment. Reviewed execution plans obtained via \texttt{EXPLAIN}-based analysis to confirm
-alignment with expected database behavior.
+  \item \textbf{First deadline:} Participated in the initial technical setup by assisting with database connectivity verification and data read/write workflows. Contributed to organizing configuration files and validating the project environment. Reviewed execution plans obtained via \texttt{EXPLAIN}-based analysis to confirm alignment with expected database behavior.
   \item \textbf{Second deadline:} Contributed to testing and validating the NL and SQL baseline pipelines by reviewing generated outputs and assisting in identifying inconsistencies. Participated in organizing result directories and verifying compatibility between baseline outputs and the evaluation framework.
-  \item \textbf{Third deadline:} ...
+  \item \textbf{Third deadline:} Contributed to integration and validation of the complete GALOIS pipeline by testing query execution across multiple datasets and variants. Assisted in verifying join handling and multi-relation query support. Reviewed experimental outputs and participated in consolidating results for the final report.
 \end{itemize}
 
 \end{document}
