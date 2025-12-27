@@ -1245,6 +1245,81 @@ Simple selection–projection queries (SP2, SP2>) are handled well by all system
 For most categories, the GALOIS variants consume more tokens than the baselines while achieving comparable or better AVG-Score, confirming the benefit of these systems. Figure~\ref{fig:exp6_avgscore} shows that structured plans are particularly beneficial for complex queries involving \texttt{DISTINCT}, aggregation, and in particular in grouping and when having multiple \texttt{WHERE} conditions, where they deliver higher or similar quality at a higher token cost compared to NL and SQL baselines.
 The JOIN class is again an exception: since our implementation currently does not support joins, the small token counts in Figure~\ref{fig:exp6_tokens} only reflect the limited amount of work performed, not an efficiency advantage.
 
+\subsection{Experiment 7: Impact of Prompt Size}
+
+The goal is to analyze how the size of the prompt evolves across iterations and to measure the impact of prompt optimization mechanisms on efficiency. As described in the original paper, we incrementally expands the LLM’s input prompt in the iterative Scan operator, passing the identifiers retrieved in previous iterations. To quantify the benefit of the logical and physical push-down optimizations we compare the unoptimized version Galois\_WO against the optimized variants Galois\_A and Galois\_F.
+
+\begin{table}[h!]
+\centering
+\caption{Prompt size comparison (Table 9 of the paper)}
+\begin{tabular}{lccc}
+\hline
+Metric & Galois\_WO & Galois\_A & Galois\_F \\
+\hline
+Avg \# Input Tokens All Iters & 41065 & 9054 & 30165 \\
+Avg \# Iters per query        & 102.79  & 4.54 & 2.17  \\
+\# Queries with 10+ Iters      & 36     & 0    & 0     \\
+\hline
+\end{tabular}
+\end{table}
+
+The experiment was done on 39 queries (GEO and MOVIES) and shows that push-down optimization produces a reduction in the total number of input tokens processed per query iteration. Galois\_A demonstrates the highest efficiency, reducing the average token count by 78.0\%, while Galois\_F achieves a 26.5\% reduction compared to the baseline. This difference indicates that the agg-based push-down strategy (adopted in Galois\_A) succeeds in minimizing the iterations necessary to maintain high-quality results.
+
+ Galois\_WO requires on average 102.79 iterations per query and goes beyond 10 iterations for 36 queries, probably mainly due to the cell by cell retrieval. In contrast, Galois\_A and Galois\_F need only 4.54 and 2.17 iterations on average and no query goes beyond 10 iterations, showing that the optimizations limit the iterative process and prevent very costly executions.
+
+\subsection{Experiment 8: Comparison with Optimal Plan (Figure 11 of the paper)}
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    ybar,
+    bar width=12pt,
+    width=10cm,
+    height=6cm,
+    ymin=0.4, ymax=0.85,
+    ylabel={AVG-Score},
+    enlarge x limits=0.25,
+    symbolic x coords={All,GEO,MOVIES},
+    xtick=data,
+    xtick style={draw=none},
+    legend style={
+        at={(0.5,1.05)},
+        anchor=south,
+        legend columns=-1,
+        /tikz/every even column/.append style={column sep=0.5cm}
+    },
+    nodes near coords,
+    nodes near coords align={vertical},
+    every node near coord/.append style={
+        font=\footnotesize,
+        rotate=90,
+        /pgf/number format/fixed,
+        /pgf/number format/precision=3
+    }
+]
+
+
+% Galois_A
+\addplot+[draw=none, fill=cyan!60]
+    coordinates {(All,0.689) (GEO,0.629) (MOVIES,0.750)};
+
+% Galois_F
+\addplot+[draw=none, fill=orange!70]
+    coordinates {(All,0.626) (GEO,0.508) (MOVIES,0.744)};
+
+% Optimal
+\addplot+[draw=none, fill=red!70]
+    coordinates {(All,0.724) (GEO,0.660) (MOVIES,0.787)};
+
+\legend{Galois$_A$, Galois$_F$, Optimal}
+\end{axis}
+\end{tikzpicture}
+\caption{AVG-Score comparison for Galois$_A$ and Galois$_F$ against the optimal plans}
+\label{fig:exp8_avgscore}
+\end{figure}
+
+
 \section{Conclusion}
 
 \section{Contributions}
