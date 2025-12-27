@@ -1,0 +1,1398 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{float}
+
+\title{PATHX \\ \large Implementation of Galois Features}
+\author{
+    Danil Smirnov \\
+    Bita Khashechian \\
+    Minseok Kim \\
+    Juliette Tonneau
+}
+\date{23 December 2025}
+\begin{document}
+\maketitle
+
+
+\tableofcontents
+
+\clearpage
+\section{GALOIS Features: Introduction and Scope}
+
+\subsection{Context and Motivation}
+
+Building on the technical setup and baseline implementations introduced in the previous project phases, this part focuses on the implementation of the GALOIS framework. In the first phase, the necessary infrastructure was established, including database setup, LLM orchestration, configuration management, and a unified execution pipeline. In the second phase, NL and SQL baselines were implemented and evaluated to assess the behavior of LLMs when answering queries without explicit query planning or optimization.
+
+The baseline results highlighted several limitations of direct LLM-based querying. In particular, a single LLM invocation often fails to retrieve complete result sets, especially for queries involving multiple predicates, joins, or aggregations. While iterative execution partially mitigates these issues, the baselines still treat the LLM as a monolithic query solver, without exploiting the structure of SQL queries.
+
+\subsection{Scope of the GALOIS Phase}
+
+The goal of this phase is to move beyond baseline prompting and implement the core ideas of the GALOIS execution model. Instead of issuing a single prompt per query, the system decomposes SQL queries into logical and physical operators, following a database-style execution pipeline. In this design, the LLM is used exclusively as a data retrieval mechanism, while all relational operations such as selection, projection, joins, grouping, and aggregation are executed locally.
+
+\subsection{Overview of Implemented Components}
+
+Within this scope, we implement several GALOIS variants that differ in their optimization strategies. These variants explore different approaches to predicate pushdown and scan selection, allowing us to study the trade-off between result quality and execution cost. The implemented variants include a version without optimizations, selective and full predicate pushdown strategies, as well as a confidence-based variant that dynamically selects execution plans.
+
+This section covers the design, implementation, and evaluation of the GALOIS operators and variants. The objective is not to fully reproduce a production-ready query optimizer, but to demonstrate how classical database execution concepts can be adapted to LLM-based query processing, and to analyze their practical impact compared to the NL and SQL baselines introduced earlier.
+
+\clearpage
+\section{Data and Ground–Truth Construction}
+
+Ground truth is constructed in \texttt{build\_ground\_truth.py}. The script takes the raw CSV data of each benchmark dataset (such as \texttt{world}, \texttt{movies}, \texttt{flight-2}, \texttt{flight-4}) and converts them into DuckDB tables. Where needed, explicit schemas are defined; for example, the movies dataset requires types for numeric and temporal columns. When CSV file names do not match the table names used in the benchmark queries, the script creates simple views so that the original SQL remains valid.
+
+The benchmark queries are stored in \texttt{queries\_*.sql} files. The script reads each file, removes line comments, and splits it into individual \texttt{SELECT} statements. Every query is executed directly in DuckDB. The resulting table is written as a JSON array of records to
+\[
+  \texttt{ground/}\langle\text{DATASET}\rangle\texttt{/query\textless i\textgreater.json}.
+\]
+These JSON files serve as the gold–standard answers for all later evaluations.
+
+A separate utility module, \texttt{dataset\_io.py}, encapsulates the discovery of datasets and loading of the SQL files. It enumerates dataset directories, reads the queries from their \texttt{queries\_*.sql} files, and also supports loading natural–language questions for the NL baseline when such text files are available.
+
+\clearpage
+\section{Baselines}
+
+\subsection{Non–iterative baseline behaviour}
+
+The simplest baseline treats the LLM as a one–shot question–answering system. In our implementation, this one-shot baseline uses IBM WatsonX Llama-3.3-70B as the LLM model. In the natural–language version, the model receives a textual query describing the task and is asked to answer in tabular JSON form. In the SQL version, it is asked to produce or execute a SQL statement, whose result is then retrieved from DuckDB.
+
+This is extremely cheap and straightforward, but our earlier experiments showed that it rarely produces complete result sets. For queries with multiple conditions or attributes, the model often omits relevant rows or misreads part of the specification. Since the system performs no further checks or retries, these errors remain.
+
+\subsection{Iterative NL and SQL baselines}
+
+To mitigate the incompleteness of one–shot responses, we implemented iterative baselines using the same model (Llama-3.3-70B). The first prompt describes the dataset, table, attributes, and conditions; the LLM returns an initial batch of rows. A follow–up prompt lists the rows already seen and explicitly asks the model to produce new ones without repetition. Newly generated rows are deduplicated and added. This cycle repeats until no new rows appear or a maximum iteration count is reached.
+
+In the NL baseline, all interaction is in natural language; in the SQL baseline, the model refines or extends SQL statements and the resulting queries are executed in DuckDB. Iteration markedly improves recall: the model gradually fills in less obvious entries and moves closer to a full table.
+
+A numerical comparison with the paper's baselines is shown in Tables~\ref{tab:nl} and \ref{tab:sql}. Although the exact values differ because of model choice and prompt details, the trend is similar: iterative SQL prompting outperforms iterative NL prompting, particularly on F1–Cell and Cardinality.
+
+\begin{table}[h]
+\centering
+\label{tab:nl}
+\begin{tabular}{lrrrr}
+\toprule
+Metric & Paper & Ours & $\Delta$ & $\Delta$ (\%) \\
+\midrule
+F1--Cell       & 0.237 & 0.354 & +0.117 & +49.4\% \\
+Cardinality    & 0.462 & 0.505 & +0.043 &  +9.3\% \\
+Tuple Constr.  & 0.065 & 0.159 & +0.094 & +144.6\% \\
+AVG--Score     & 0.254 & 0.339 & +0.085 &  +33.5\% \\
+\#Tokens (M)   & 0.830 & 0.330 & -0.500 & -60.8\% \\
+Avg Time (s)   & 120.0 & 21.25 & -98.75 & -82.3\% \\
+\bottomrule
+\end{tabular}
+\caption{NL baseline comparison between the paper and our implementation using Llama-3.3-70B.}
+\end{table}
+
+\clearpage
+\begin{table}[h]
+\centering
+\label{tab:sql}
+\begin{tabular}{lrrrr}
+\toprule
+Metric & Paper & Ours & $\Delta$ & $\Delta$ (\%) \\
+\midrule
+F1--Cell       & 0.431 & 0.367 & -0.064 & -14.8\% \\
+Cardinality    & 0.659 & 0.611 & -0.048 &  -7.3\% \\
+Tuple Constr.  & 0.351 & 0.243 & -0.108 & -30.8\% \\
+AVG--Score     & 0.481 & 0.407 & -0.074 & -15.4\% \\
+\#Tokens (M)   & 0.330 & 0.210 & -0.120 & -37.0\% \\
+Avg Time (s)   & 61.4  & 11.0 & -50.4 & -82.1\% \\
+\bottomrule
+\end{tabular}
+\caption{SQL baseline comparison between the paper and our implementation using Llama-3.3-70B.}
+\end{table}
+
+\subsection{Baseline orchestration}
+
+The script \texttt{run\_baselines\_and\_compare.py} orchestrates the NL and SQL baselines. It selects a provider and strategy, runs the baselines on the chosen datasets, and then calls a comparison routine that evaluates their outputs against ground truth using the same metrics later used for GALOIS. These baselines serve as the reference execution model that GALOIS later decomposes into explicit operators.
+
+\clearpage
+\section{Prompt Construction and LLM Orchestration}
+\label{sec:prompt_orchestration}
+
+This section describes the two core components that enable all LLM-based operators in our system: (i) a templating layer for constructing consistent prompts, and (ii) an execution layer for issuing prompts to the model and collecting responses. Concretely, prompts are generated using Jinja2 templates managed in \texttt{templates.py}, and all model calls are executed through a shared LangChain client. In all experiments, the shared LangChain client is configured to call ibm watsonx Llama-3.3-70B, and we keep this model fixed across baselines and all GALOIS variants to ensure a controlled comparison.
+
+All prompts used to query the LLM are created via Jinja2 templates and managed by \texttt{templates.py}. Instead of assembling long prompt strings by hand, the code passes structured parameters---dataset name, table name, target attributes, WHERE clause, previously seen rows, and so on---to template functions. These functions return fully instantiated prompts that remain consistent across runs while still being adaptable to each operator and variant.
+
+The most important prompt families are:
+
+\begin{itemize}
+  \item \emph{Table--Scan prompts} ask the LLM to return rows as JSON for a particular table, restricted to a set of attributes and an optional WHERE clause. There is a separate template for the first call and for follow--up calls that list already seen rows.
+  \item \emph{Key--Scan prompts} request only the key attributes (for example a primary key or city name) for rows that satisfy the query. Again there are first and follow--up versions.
+  \item \emph{Tuple--completion prompts} take a key value and ask the LLM for the remaining attributes for that row.
+  \item \emph{Cell--level prompts} ask for a single attribute value for a given key. They are used in the wO variant, where tuples are built cell by cell.
+  \item \emph{Condition--evaluation prompts} present each atomic WHERE condition and ask the LLM to label it as \emph{higher}/\emph{lower} (selectivity mode) or \emph{high}/\emph{low} (confidence mode).
+  \item \emph{Key--confidence prompts} ask the LLM for a scalar in $[0,1]$ that expresses how confident it is that keys can be reliably enumerated for the query.
+\end{itemize}
+
+All templates enforce a strict JSON output format. After each call, a dedicated response parser extracts and repairs JSON snippets where needed and normalizes them into typed objects (e.g., a list of row dictionaries, a condition--label map, or a scalar confidence value). This separation allows higher--level algorithms to operate on clean structured outputs rather than free text.
+
+\subsection{Jinja2: Prompt Templating}
+Jinja2 is used as the main mechanism to construct prompts for \texttt{LLMScan} and \texttt{Filter-LLMScan}. The objective is to keep prompts consistent across runs while still allowing each operator to specialize the query according to the table, attribute list, and pushed-down predicates. Rather than concatenating strings in Python, each operator selects a corresponding Jinja2 template (e.g., Table--Scan, Key--Scan, tuple completion, and follow--up variants) and instantiates it by injecting the required parameters at runtime. This design yields a stable prompt family across strategies and makes it straightforward to compare different operator variants under controlled prompt changes. This design also simplifies ablation studies, as changes to prompt structure are localized and do not affect the surrounding execution logic.
+
+\subsection{LangChain: LLM Call Execution}
+LangChain serves as the execution backbone that connects our Python operators to the underlying language model. The abstract base class \texttt{BaseScanOperator} wraps the LangChain client and exposes a method \texttt{call\_llm()} that sends the instantiated prompt, measures wall--clock time, extracts token usage from response metadata, and returns the raw content. Both \texttt{LLMScanOperator} and \texttt{FilterLLMScanOperator} rely on the same call path; the main difference is the prompt content (e.g., whether the predicate is pushed down). This centralized execution layer guarantees consistent time and token accounting across all operators, baselines, and GALOIS variants.
+
+For the two-phase retrieval used by Key--Scan, LangChain simply executes the phases as an explicit sequence of calls: first the system prompts for key values satisfying the conditions, and then it iterates over the retrieved keys and issues tuple--completion (or cell--level) prompts to obtain the remaining attributes. Using a single shared execution layer for all calls also simplifies logging and ensures consistent time and token accounting across strategies.
+
+\clearpage
+\section{LLMScan and Physical Scan Operators}
+
+In the GALOIS paper, LLMScan is a logical operator that retrieves tuples via an LLM. In our system, LLMScan is implemented by two concrete physical operators, both inheriting from \texttt{BaseScanOperator}: a Table–Scan operator and a Key–Scan operator.
+
+\subsection{Common infrastructure}
+
+The abstract \texttt{BaseScanOperator} (defined in \texttt{base\_scan.py}) provides a unified interface for all scan strategies. It implements LLM interaction through \texttt{call\_llm()}, keeps timing and token counters, and includes helper methods to generate deterministic row signatures and filter duplicate rows. This shared infrastructure ensures that different strategies can be compared consistently.
+
+Both Table–Scan and Key–Scan follow an iterative pattern. The first call asks the LLM for an initial set of tuples or key values. Subsequent calls include the rows already retrieved and instruct the LLM not to repeat them. New rows are deduplicated using row signatures before they are added to the result set.
+
+\subsection{Table–Scan}
+
+Table–Scan, implemented in \texttt{table\_scan.py}, directly retrieves full tuples that satisfy the query. The operator receives a dataset, table, attribute list, optional WHERE clause, and maximum number of iterations. At a high level, the procedure is:
+
+\begin{algorithm}[h]
+\caption{Table–Scan}
+\begin{algorithmic}[1]
+\Require dataset, table, attributes, where\_clause, max\_iters
+\State $R \gets \emptyset$ \Comment{collected rows}
+\State $p \gets \text{build\_first\_table\_prompt}(\text{dataset},\text{table},\text{attributes},\text{where\_clause})$
+\State $rows \gets \text{call\_llm}(p)$
+\State $R \gets R \cup rows$
+\For{$i \gets 2$ to $max\_iters$}
+  \State $p \gets \text{build\_followup\_table\_prompt}(\text{dataset},\text{table},\text{attributes},\text{where\_clause},R)$
+  \State $rows \gets \text{call\_llm}(p)$
+  \State $rows \gets rows \setminus R$ \Comment{keep only new rows}
+  \If{$rows = \emptyset$} \State \textbf{break} \EndIf
+  \State $R \gets R \cup rows$
+\EndFor
+\State \Return $R$
+\end{algorithmic}
+\end{algorithm}
+
+The operator returns the final rows together with iteration count, total runtime, token usage, and a flag that indicates that Table–Scan was used. This strategy is relatively cheap in terms of LLM calls because each prompt can return several rows, but for complex queries it may fail to enforce all conditions reliably.
+
+\subsection{Key–Scan}
+
+Key–Scan, implemented in \texttt{key\_scan.py}, splits retrieval into two phases: key discovery and tuple completion. The operator is given a list of attributes and, optionally, explicit key attributes; if no keys are specified, the first attribute is used as the key. The high–level algorithm is:
+
+\begin{algorithm}[h]
+\caption{Key–Scan}
+\begin{algorithmic}[1]
+\Require dataset, table, attributes, key\_attributes, where\_clause, max\_iters
+\State split \textit{attributes} into key attributes $K$ and non–key attributes $A$
+\State $Keys \gets \emptyset$ \Comment{phase 1: key discovery}
+\State $p \gets \text{build\_first\_key\_prompt}(\text{dataset},\text{table},K,\text{where\_clause})$
+\State $new \gets \text{call\_llm}(p)$
+\State $Keys \gets Keys \cup new$
+\For{$i \gets 2$ to $max\_iters$}
+  \State $p \gets \text{build\_followup\_key\_prompt}(\text{dataset},\text{table},K,\text{where\_clause},Keys)$
+  \State $new \gets \text{call\_llm}(p)$
+  \State $new \gets new \setminus Keys$
+  \If{$new = \emptyset$} \State \textbf{break} \EndIf
+  \State $Keys \gets Keys \cup new$
+\EndFor
+\State $R \gets \emptyset$ \Comment{phase 2: tuple completion}
+\ForAll{$k \in Keys$}
+  \State $p \gets \text{build\_tuple\_prompt}(\text{dataset},\text{table},k,A,\text{where\_clause})$
+  \State $vals \gets \text{call\_llm}(p)$
+  \State $row \gets k \cup vals$
+  \State $R \gets R \cup \{row\}$
+\EndFor
+\State \Return $R$
+\end{algorithmic}
+\end{algorithm}
+
+This two–phase strategy generally achieves higher quality tuples because the second–phase prompts are very focused. The drawback is the higher cost: at least one LLM call is needed per key to complete the tuple. In the experiments, time and tokens from both phases are aggregated, and the metadata records how many keys were found and that Key–Scan was used.
+
+\clearpage
+\section{Logical Optimization and WHERE–Clause Evaluation}
+
+\subsection{Predicate pushdown}
+
+Logical optimization of the WHERE clause is done in \texttt{pushdown.py}. Its purpose is to decide which conditions should be pushed into the LLM prompt and which should be evaluated locally after the scan.
+
+The optimizer assumes that the WHERE clause is a conjunction of atomic conditions separated by \texttt{AND}. It offers functions to parse the clause into a list of strings, rebuild a clause from a subset of conditions, and finally decide which ones are pushed down. The decision procedure
+\[
+\texttt{determine\_pushdown(conditions, evaluation, mode)}
+\]
+takes the list of conditions, a mapping from conditions to labels, and a mode flag that indicates whether we consider selectivity labels (\emph{higher}/\emph{lower}) or confidence labels (\emph{high}/\emph{low}). It implements exactly the rule described in the GALOIS paper. If $C$ is the set of conditions and $C^\ast$ the subset whose label matches the chosen criterion, then:
+\begin{itemize}
+  \item if $|C^\ast| = 0$, nothing is pushed down;
+  \item if $|C^\ast| = 1$, that single condition is pushed down;
+  \item if $|C^\ast| > 1$, all conditions in $C^\ast$ are pushed and combined with \texttt{AND}.
+\end{itemize}
+Conditions that are not pushed become residual predicates, enforced locally on the rows returned by the scan operator. The labels in the \texttt{evaluation} map are produced by LLM calls using the condition–evaluation prompts.
+
+\subsection{WHERE–clause evaluator}
+
+Our implementation also includes a complete WHERE–clause evaluator used for in–memory filtering, both when conditions are not pushed down and during final post–filtering. It supports comparison operators (\texttt{=}, \texttt{!=}, \texttt{<}, \texttt{<=}, \texttt{>}, \texttt{>=}), logical operators \texttt{AND} and \texttt{OR} with parentheses, and additional constructs such as \texttt{LIKE}, \texttt{IN}, \texttt{IS NULL}, and \texttt{IS NOT NULL}. Unit suffixes like \texttt{K}, \texttt{M}, and \texttt{B} are interpreted as multipliers so that numerical comparisons behave as expected.
+
+This evaluator ensures that, regardless of what the LLM does, the final result respects the original boolean expression in the SQL query.
+
+\clearpage
+\section{GALOIS Variants}
+
+The four main GALOIS variants are implemented as separate classes: \texttt{GaloisWO}, \texttt{GaloisA}, \texttt{GaloisS}, and \texttt{GaloisF}. Each takes a dataset, table, list of attributes, and WHERE clause, and returns a result set with metadata. All variants first extend the attribute list to include any columns that appear in the WHERE clause. After the scan operator runs, they reapply the full WHERE clause locally and then project the tuples down to the attributes requested by the original query.
+
+\subsection{GALOIS WO: cell–based retrieval without optimizations}
+
+The WO variant behaves like a cell–level oracle. It first discovers keys using the same key–only iterative process as in Key–Scan, but without pushing the WHERE clause into the LLM. Once a key set is available, the variant fills in each non–key attribute cell by cell, using the cell–value prompt for each (key, attribute) pair.
+
+After all cells have been retrieved, the complete WHERE clause is enforced locally and the tuples are projected to the desired attributes. The number of LLM calls scales with the number of rows times the number of attributes, making this variant deliberately expensive. It serves mainly as an upper bound on what is achievable without logical or physical optimization.
+
+\subsection{GALOIS A: push all conditions}
+
+GALOIS A pushes the entire WHERE clause into Table–Scan. The Table–Scan operator is executed with the full condition string inside the prompt. Afterwards the same clause is applied locally to correct for any mistakes in the LLM output. This variant is cheap in terms of LLM calls but can lose recall when the WHERE clause is complex and the model does not fully enforce every condition in one generation.
+
+\subsection{GALOIS S: selectivity–based pushdown}
+
+GALOIS S mimics a classic database optimizer that uses selectivity estimates. The WHERE clause is parsed into atomic conditions, which are passed to the LLM via the selectivity prompt. The model labels each condition as \emph{higher} or \emph{lower}. The \texttt{determine\_pushdown} function is then applied in selectivity mode to select none, one, or a conjunction of conditions to push down.
+
+Table–Scan is run with this subset of conditions embedded in the prompt. As in the other variants, the full WHERE clause is applied locally afterwards. Metadata records which conditions were deemed more selective and which were actually pushed. In the current code, the degenerate case of a single condition can be handled directly; a minor refinement would be to always send it through the selectivity evaluation for maximal faithfulness to the paper.
+
+\subsection{GALOIS F: full optimization}
+
+GALOIS F combines a logical optimizer using confidence labels with a physical optimizer that chooses between Table–Scan and Key–Scan.
+
+For logical optimization, the WHERE clause is parsed as before and fed to the confidence prompt, which asks the model to label each condition \emph{high} or \emph{low} depending on how confident it is that tuples satisfying the condition can be retrieved. \texttt{determine\_pushdown} is applied in confidence mode to decide the pushed subset.
+
+For physical optimization, the system asks for a key–retrieval confidence $c \in [0,1]$. If the query projects $n$ attributes, the implementation computes
+\[
+\mathrm{conf}(q) = c^{n},
+\]
+in line with the paper's idea of normalizing confidence by query width. This value is compared to a threshold $\tau$ (configurable, default $0.6$). If $\mathrm{conf}(q) \geq \tau$, Key–Scan is chosen; otherwise Table–Scan is used.
+
+The chosen scan operator runs with the pushed conditions. The full WHERE clause is again re–applied locally, and the output is projected to the original attributes. Metadata includes the per–condition confidence labels, the pushed subset, $c$, $\mathrm{conf}(q)$, the threshold $\tau$, and the choice of scan operator.
+
+\clearpage
+\section{Experimental Pipeline}
+This section describes the sequence of steps used to run all experiments. The same procedure was followed for every run, beginning with the construction of the ground-truth data, continuing through dataset ingestion and baseline evaluation, and ending with the execution of the GALOIS-inspired query engine.
+Unless otherwise stated, all runs in this pipeline use the same LLM backend (Llama-3.3-70B) for the NL baseline, SQL baseline, and all GALOIS operator variants.
+\subsection{Stages 1 and 2 commands}
+The first stage of the workflow prepares the ground truth. This step processes the raw data files for datasets and produces a reference used in all evaluations. The ground truth was generated by running:
+
+\begin{verbatim}
+python -m scripts.build_ground_truth --data-root data \
+    --ground-root ground --datasets geo movies
+\end{verbatim}
+
+Once the ground truth had been created, the datasets were ingested into database. The ingestion step was executed as:
+
+\begin{verbatim}
+python -m src.db_interaction.ingest_all --datasets geo movies
+\end{verbatim}
+
+After ingestion, the two non-iterative baselines were run. The SQL prompting baseline was executed using:
+
+\begin{verbatim}
+python -m src.baselines.sql_baseline --datasets geo movies \
+    --strategy direct
+\end{verbatim}
+
+and the natural-language prompting baseline was run in the same way, using:
+
+\begin{verbatim}
+python -m src.baselines.nl_baseline --datasets geo movies \
+    --strategy direct
+\end{verbatim}
+
+Both of these baselines rely on an iterative prompting interaction. 
+
+The outputs of the baselines were evaluated against the ground-truth data using the metrics described in the Results section. Evaluation was performed by running:
+
+\begin{verbatim}
+python -m scripts.galois_eval --ground ground \
+    --submissions sql_baseline_results --overall
+\end{verbatim}
+
+and the comparative summary of the two baselines was generated using:
+
+\begin{verbatim}
+python -m src.baselines.compare_results
+\end{verbatim}
+
+\subsection{GALOIS stage commands}
+Following the baseline evaluation, the full GALOIS-inspired query engine was executed. This includes the LLMScan operator, the Filter-LLMScan operator, and the Two-Phase Key-First Retrieval operator. All operator variants were run using:
+
+\begin{verbatim}
+python -m src.galois.run_galois \
+  --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 \
+  --variants galois_wo galois_s galois_a galois_f
+\end{verbatim}
+
+Compare all results and print the table:
+
+\begin{verbatim}
+python -m src.galois.experiments.exp1_table \
+  --ground ground \
+  --submissions sql_baseline_results nl_baseline_results results_galois_wo results_galois_s results_galois_a results_galois_f \
+  --datasets GEO MOVIES PRESIDENTS WORLD FLIGHT-2 FLIGHT-4 \
+  --cell-metric similarity \
+  --tuple-metric constraint
+\end{verbatim}
+
+This comparison illustrates the difference between monolithic prompting and structured, operator-guided execution.
+
+\clearpage
+\section{Numerical Results}
+
+\subsection{EU Cities Example}
+To provide a concrete end–to–end example aligned with the paper, we reproduce the EU Cities experiment. The table \texttt{EU\_Cities} from the \texttt{WORLD} dataset contains European cities with attributes such as \texttt{name}, \texttt{country}, \texttt{population}, and \texttt{num\_private\_hospitals}.
+
+The target query selects all European cities with more than one million inhabitants and more than fifteen private hospitals. In natural language, the naive baseline question is:
+
+\medskip
+\emph{``What are the population of European cities with more than 1M people and more than fifteen private hospitals?''}
+\medskip
+
+The equivalent SQL used by the baselines and GALOIS variants is:
+\begin{verbatim}
+SELECT name, country, population, num_private_hospitals
+FROM EU_Cities
+WHERE population > 1000000
+  AND num_private_hospitals > 15;
+\end{verbatim}
+
+We run this query with the naive NL baseline and with the four GALOIS variants WO, A, S, and F. All pipelines use the same attribute set and conditions. They also use the same underlying model (AZURE gpt-4o), so differences in quality stem from execution strategy rather than model changes.
+
+Table~\ref{tab:summary_eu} summarizes the runtime, token usage, and number of rows returned by each method.
+
+\begin{table}[h]
+\centering
+\label{tab:summary_eu}
+\begin{tabular}{lrrrr}
+\toprule
+Variant    & Rows & Tokens & Time (s) & Strategy \\
+\midrule
+Naive LLM & 4 &   332 &  2.15 & naive single call \\
+Galois WO & 8 & 17916 & 43.27 & cell–by–cell \\
+Galois A  & 4 &   597 &  4.09 & table–scan \\
+Galois S  & 5 &   848 &  5.70 & table–scan \\
+Galois F  & 9 &  2202 & 14.76 & key–scan \\
+\bottomrule
+\end{tabular}
+\caption{Summary of EU Cities results across variants using AZURE gpt-4o.}
+\end{table}
+
+\subsubsection{Result sets}
+
+For completeness we report the exact result sets generated by each variant.
+
+\paragraph{Naive NL baseline:}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l l r r}
+\toprule
+name   & country & population & num private hospitals \\
+\midrule
+Berlin & Germany & 3769000 & 20 \\
+Madrid & Spain   & 3223000 & 18 \\
+Rome   & Italy   & 2873000 & 22 \\
+Paris  & France  & 2148000 & 25 \\
+\bottomrule
+\end{tabular}
+\caption{EU Cities result set for the \texttt{Naive\_LLM} variant using AZURE gpt-4o.}
+\end{table}
+
+The naive baseline captures four major cities that satisfy the constraints but misses several valid entries.
+
+\paragraph{Galois WO:}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l l r r}
+\toprule
+name     & country          & population & num private hospitals \\
+\midrule
+Berlin   & Germany          & 3769000 & 50 \\
+Budapest & Hungary          & 1750000 & 30 \\
+London   & United Kingdom   & 8982000 & 50 \\
+Madrid   & Spain            & 3266000 & 40 \\
+Paris    & France           & 2161000 & 40 \\
+Rome     & Italy            & 2873000 & 50 \\
+\bottomrule
+\end{tabular}
+\caption{EU Cities result set for the \texttt{Galois\_WO} variant using AZURE gpt-4o.}
+\end{table}
+
+The WO plan reconstructs rows cell by cell for every discovered key. Coverage is wider and includes cities such as Budapest and London that do not appear in the naive baseline. Numerical attributes sometimes show noisy values because each cell is inferred independently.
+
+\paragraph{Galois A:}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l l r r}
+\toprule
+name   & country & population & num private hospitals \\
+\midrule
+Berlin & Germany & 3748000 & 20 \\
+Madrid & Spain   & 3266000 & 18 \\
+Rome   & Italy   & 2873000 & 25 \\
+Paris  & France  & 2148000 & 30 \\
+\bottomrule
+\end{tabular}
+\caption{EU Cities result set for the \texttt{Galois\_A} variant using AZURE gpt-4o.}
+\end{table}
+
+The A variant uses a table–scan with full pushdown. It returns a narrower and more conservative set of rows than WO; some valid cities disappear when all conditions must be satisfied inside the prompt.
+
+\paragraph{Galois S:}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l l r r}
+\toprule
+name   & country & population & num private hospitals \\
+\midrule
+Berlin   & Germany & 3748000 & 50 \\
+Madrid   & Spain   & 3266000 & 40 \\
+Rome     & Italy   & 2873000 & 35 \\
+Paris    & France  & 2148000 & 60 \\
+Vienna   & Austria & 1900000 & 25 \\
+\bottomrule
+\end{tabular}
+\caption{EU Cities result set for the \texttt{Galois\_S} variant using AZURE gpt-4o.}
+\end{table}
+
+Here only high–selectivity conditions are pushed down. The result set now includes Vienna as an extra valid city, illustrating how selective pushdown can avoid overly aggressive early filtering.
+
+\paragraph{Galois F:}
+
+\clearpage
+\begin{table}[t]
+\centering
+\begin{tabular}{l l r r}
+\toprule
+name      & country          & population & num private hospitals \\
+\midrule
+London    & United Kingdom   & 8982000 & 45 \\
+Berlin    & Germany          & 3669491 & 72 \\
+Madrid    & Spain            & 3266126 & 39 \\
+Rome      & Italy            & 2873000 & 45 \\
+Paris     & France           & 2161000 & 39 \\
+Warsaw    & Poland           & 1796058 & 45 \\
+Barcelona & Spain            & 1620343 & 50 \\
+Munich    & Germany          & 1488202 & 45 \\
+Dublin    & Ireland          & 1173179 & 19 \\
+\bottomrule
+\end{tabular}
+\caption{EU Cities result set for the \texttt{Galois\_F} variant using AZURE gpt-4o.}
+\end{table}
+
+
+The fully optimized F variant retrieves the largest set of correct tuples among all iterative plans while keeping token usage moderate. It uncovers cities such as Barcelona, Munich, Warsaw, and Dublin that require deeper exploration of the model’s internal knowledge. The combination of confidence–based pushdown and adaptive choice between Key–Scan and Table–Scan appears to be effective.
+
+\clearpage
+\section{Experiments}
+
+This section describes in more detail the experiments presented in the GALOIS paper to demonstrate the quality of the proposed approach.
+All experiments are conducted on the same benchmark datasets and rely on the same ground-truth results constructed as described in Section~2.
+We evaluate the NL, SQL, GALOIS-WO, GALOIS-A, and GALOIS-F systems.
+Unless stated otherwise, the main evaluation metric is the \textit{AVG-Score}, defined as the mean of \textit{F1-Cell}, \textit{Cardinality}, and \textit{Tuple-Constraint}.
+
+\subsection{Experiment 1: Overall Evaluation}
+
+In this experiment, we evaluate the overall performance of the GALOIS variants against the NL, SQL, and GALOIS baselines using the Llama-3.3-70B model.
+This experiment provides a global comparison across all queries and datasets without conditioning on query structure or semantics.
+
+Table~\ref{tab:exp1_overall_results} reports our replication of Table~3 from the original paper which is presented in Table~\ref{tab:galois_table3}, presenting the results obtained in our implementation.
+
+\begin{table}[htbp]
+\centering
+\caption{Overall performance comparison between baselines and GALOIS variants}
+\label{tab:exp1_overall_results}
+\begin{tabular}{lcccccc}
+\hline
+Metric 
+& NL 
+& GALOIS\_WO 
+& GALOIS\_S 
+& GALOIS\_A 
+& GALOIS\_F \\
+\hline
+F1-Cell       
+& 0.315
+& 0.233
+& 0.500
+& \textbf{0.520}
+& 0.435 \\
+
+Cardinality   
+& 0.517
+& 0.288
+& 0.609
+& \textbf{0.711}
+& 0.567 \\
+
+Tuple Constr. 
+& 0.116
+& 0.105
+& 0.300
+& \textbf{0.330}
+& 0.247 \\
+
+AVG-Score     
+& 0.316
+& 0.209
+& 0.469
+& \textbf{0.521}
+& 0.416 \\
+
+\#Tokens (M)  
+& \textbf{0.191}
+& 2.078
+& 0.378
+& 0.366
+& 0.515 \\
+
+Avg Time (s)  
+& \textbf{20.304}
+& 232.374
+& 28.836
+& 29.535
+& 77.247 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{results of Table 3 in GALOIS paper}
+\label{tab:galois_table3}
+\begin{tabular}{lcccccc}
+\hline
+\textbf{Metric} 
+& \textbf{NL} 
+& \textbf{SQL} 
+& \textbf{GALOIS$_{WO}$} 
+& \textbf{GALOIS$_S$} 
+& \textbf{GALOIS$_A$} 
+& \textbf{GALOIS$_F$} \\
+\hline
+F1-Cell
+& 0.237
+& 0.431
+& 0.518
+& 0.480
+& \textit{0.543}
+& \textbf{0.563} \\
+
+Cardinality
+& 0.462
+& 0.659
+& 0.691
+& 0.655
+& 0.799
+& \textbf{0.835} \\
+
+Tuple Constr.
+& 0.065
+& 0.351
+& 0.389
+& 0.365
+& \textit{0.448}
+& \textbf{0.464} \\
+
+AVG-Score
+& 0.254
+& 0.481
+& 0.531
+& 0.500
+& \textit{0.592}
+& \textbf{0.622} \\
+
+\#Tokens (M)
+& \textbf{0.83}
+& 0.33
+& 19.71
+& 0.96
+& 0.95
+& \textit{1.72} \\
+
+Avg Time (s)
+& 120
+& \textit{61.4}
+& 1460
+& 130
+& 120.5
+& \textbf{47.4} \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\label{tab:diff_my_vs_paper}
+\begin{tabular}{lcccccc}
+\hline
+Metric & System & Paper & Ours & Abs.\ Diff. & Rel.\ Diff. \\
+\hline
+F1-Cell & NL            & 0.237 & 0.315   & 0.078   & 0.329 \\
+        & GALOIS$_{WO}$ & 0.518 & 0.233   & 0.285   & -0.550 \\
+        & GALOIS$_S$    & 0.480 & 0.500   & 0.020   & 0.042 \\
+        & GALOIS$_A$    & 0.543 & 0.520   & 0.023   & -0.042 \\
+        & GALOIS$_F$    & 0.563 & 0.435   & 0.128   & -0.227 \\
+\hline
+Cardinality & NL            & 0.462 & 0.517   & 0.055   & 0.119 \\
+            & GALOIS$_{WO}$ & 0.691 & 0.288   & 0.403   & -0.583 \\
+            & GALOIS$_S$    & 0.655 & 0.609   & 0.046   & -0.070 \\
+            & GALOIS$_A$    & 0.799 & 0.711   & 0.088   & -0.110 \\
+            & GALOIS$_F$    & 0.835 & 0.567   & 0.268   & -0.321 \\
+\hline
+Tuple Constr. & NL            & 0.065 & 0.116   & 0.051   & 0.785 \\
+              & GALOIS$_{WO}$ & 0.389 & 0.105   & 0.284   & -0.730 \\
+              & GALOIS$_S$    & 0.365 & 0.300   & 0.065   & -0.178 \\
+              & GALOIS$_A$    & 0.448 & 0.330   & 0.118   & -0.263 \\
+              & GALOIS$_F$    & 0.464 & 0.247   & 0.217   & -0.468 \\
+\hline
+AVG-Score & NL            & 0.254 & 0.316   & 0.062   & 0.244 \\
+          & GALOIS$_{WO}$ & 0.531 & 0.209   & 0.322   & -0.606 \\
+          & GALOIS$_S$    & 0.500 & 0.469   & 0.031   & -0.062 \\
+          & GALOIS$_A$    & 0.592 & 0.521   & 0.071   & -0.120 \\
+          & GALOIS$_F$    & 0.622 & 0.416   & 0.206   & -0.331 \\
+\hline
+\#Tokens (M) & NL            & 0.83  & 0.191   & 0.639   & -0.770 \\
+             & GALOIS$_{WO}$ & 19.71 & 2.078   & 17.632  & -0.895 \\
+             & GALOIS$_S$    & 0.96  & 0.378   & 0.582   & -0.606 \\
+             & GALOIS$_A$    & 0.95  & 0.366   & 0.584   & -0.615 \\
+             & GALOIS$_F$    & 1.72  & 0.515   & 1.205   & -0.700 \\
+\hline
+Avg Time (s) & NL            & 120   & 20.304  & 99.696  & -0.831 \\
+             & GALOIS$_{WO}$ & 1460  & 232.374 & 1227.626& -0.841 \\
+             & GALOIS$_S$    & 130   & 28.836  & 101.164 & -0.778 \\
+             & GALOIS$_A$    & 120.5 & 29.535  & 90.965  & -0.755 \\
+             & GALOIS$_F$    & 47.4  & 77.247  & 29.847  & 0.630 \\
+\hline
+\end{tabular}
+\caption{Absolute and relative differences between our results and GALOIS 
+Table~\ref{tab:galois_table3}}
+\end{table}
+
+
+In the results, we observe that the optimized GALOIS variants consistently outperform the NL and SQL baselines in terms of AVG-Score, confirming the effectiveness of structured execution strategies over monolithic prompting.
+
+\subsection{Experiment 2: Impact of Logical Optimization}
+In this section, we evaluate the impact of logical optimization strategies in \textsc{GALOIS} using the \textsc{GEO} dataset.
+
+All experiments use \textsc{LLaMA-3.1-70B} as the underlying language model.
+Answer quality is measured using AVG-Score, which reflects the correctness of generated query results, while execution cost is approximated by the total number of tokens consumed during query execution.
+
+To isolate the effect of logical optimization, the physical execution plan is fixed (Table scan) for all queries, and only the logical predicate pushdown strategy is varied.
+This controlled setup ensures that observed differences in answer quality and efficiency are attributable solely to logical optimization decisions.
+
+We examine how different predicate pushdown strategies affect answer quality and execution cost in \textsc{GALOIS}.
+For each query, a confidence estimator determines whether individual \texttt{WHERE} predicates should be pushed down to the language model.
+We compare three logical strategies:
+(i) \textbf{NO-PUSH}, in which all predicates are applied after the language model generates results;
+(ii) \textbf{GALOIS\_A}, which pushes down all available predicates without filtering; and
+(iii) \textbf{GALOIS\_F}, which selectively pushes down only those predicates deemed reliable by the estimator.
+
+We report AVG-Score as a measure of answer quality and total token consumption as a proxy for execution cost.
+Table~\ref{tab:logical_optimization_reformatted} summarizes the results.
+
+\begin{table}[htbp]
+\centering
+\caption{Effect of logical optimization strategies}
+\label{tab:logical_optimization_reformatted}
+\begin{tabular}{lccc}
+\hline
+\textbf{Metric} & \textbf{No-Push} & \textbf{GALOIS$_A$} & \textbf{GALOIS$_F$} \\
+\hline
+AVG-Score     & 0.631 & 0.579 & \textbf{0.699} \\
+\#Tokens in M & 0.178 & 0.098 & \textbf{0.090} \\
+\hline
+\end{tabular}
+\end{table}
+
+
+\begin{table}[htbp]
+\centering
+\caption{results of Table 4 in GALOIS paper.}
+\label{tab:logical_optimization}
+\begin{tabular}{lccc}
+\hline
+\textbf{Metric} & \textbf{No-Push} & \textbf{GALOIS$_A$} & \textbf{GALOIS$_F$} \\
+\hline
+AVG-Score      & 0.637 & 0.598 & \textbf{0.708} \\
+\#Tokens in M  & 0.175 & 0.097 & \textbf{0.092} \\
+\hline
+\end{tabular}
+\end{table}
+
+The results show that indiscriminately pushing down all predicates (\textbf{GALOIS\_A}) reduces token usage but leads to a substantial degradation in answer quality.
+This indicates that unreliable predicates can overconstrain the language model and hinder its reasoning process.
+In contrast, confidence-based predicate pushdown (\textbf{GALOIS\_F}) achieves the highest answer quality while also minimizing execution cost among the evaluated strategies.
+
+Confidence-aware logical optimization enables \textsc{GALOIS} to outperform both aggressive pushdown and no-push baselines, achieving higher answer quality with lower token consumption.
+
+
+
+\subsection{Experiment 3: Impact of LLM Parameters}
+
+Experiment~3 analyzes how varying the confidence threshold used within GALOIS-F affects the precision--recall trade-off.
+For each query, only rows whose associated confidence exceeds a given threshold are retained. The experiement is done on the MOVIES dataset using the gemini-2.5-flash model.
+Cell-level precision and recall are then computed against ground truth using the same similarity metric as in the main evaluation.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.85\textwidth,
+    height=6.5cm,
+    title={Precision and Recall for GALOIS (MOVIES)},
+    xlabel={Confidence threshold $p$},
+    ylabel={Score},
+    xmin=0.58, xmax=1.1,
+    ymin=0.3, ymax=0.8,
+    xtick={0.6,0.7,0.8,0.9,1.0,1.05},
+    xticklabels={0.6,0.7,0.8,0.9,0.99,0.995},
+    grid=both,
+    grid style={densely dotted},
+    legend style={
+        at={(0.02,0.02)},
+        anchor=south west,
+        font=\small
+    },
+    tick label style={font=\small},
+    label style={font=\small},
+    title style={font=\small},
+]
+
+% Precision
+\addplot[
+    color=blue,
+    mark=*,
+    thick
+] coordinates {
+    (0.6,0.45)
+    (0.7,0.485)
+    (0.8,0.42)
+    (0.9,0.46)
+    (1.0,0.475)
+    (1.05,0.50)
+};
+
+% Recall
+\addplot[
+    color=orange,
+    mark=square*,
+    thick
+] coordinates {
+    (0.6,0.64)
+    (0.7,0.715)
+    (0.8,0.665)
+    (0.9,0.64)
+    (1.0,0.68)
+    (1.05,0.69)
+};
+
+\addlegendentry{Precision}
+\addlegendentry{Recall}
+
+\end{axis}
+\end{tikzpicture}
+\caption{Precision and recall of GALOIS-F on the MOVIES dataset for different confidence thresholds $p$ on the LLM output log-probabilities.}
+\label{fig:threshold_pr}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.85\textwidth,
+    height=6.5cm,
+    title={Precision and Recall vs. Confidence Threshold},
+    xlabel={Confidence threshold $p$},
+    ylabel={Score},
+    xmin=0.58, xmax=1.1,
+    ymin=0.54, ymax=0.67,
+    xtick={0.6,0.7,0.8,0.9,1.0,1.05},
+    xticklabels={0.6,0.7,0.8,0.9,0.99,0.995},
+    grid=both,
+    grid style={densely dotted},
+    legend style={
+        at={(0.02,0.02)},
+        anchor=south west,
+        font=\small
+    },
+    tick label style={font=\small},
+    label style={font=\small},
+    title style={font=\small},
+]
+
+% Precision
+\addplot[
+    color=blue,
+    mark=*,
+    thick
+] coordinates {
+    (0.6,0.62)
+    (0.7,0.61)
+    (0.8,0.61)
+    (0.9,0.64)
+    (1.0,0.65)
+    (1.05,0.66)
+};
+
+% Recall
+\addplot[
+    color=orange,
+    mark=square*,
+    thick
+] coordinates {
+    (0.6,0.63)
+    (0.7,0.62)
+    (0.8,0.61)
+    (0.9,0.60)
+    (1.0,0.55)
+    (1.05,0.545)
+};
+
+\addlegendentry{Precision}
+\addlegendentry{Recall}
+
+\end{axis}
+\end{tikzpicture}
+\caption{Results of figure 7 in GALIOS paper}
+\label{fig:threshold_pr}
+\end{figure}
+
+
+
+Intuitively, one would expect a classic precision–recall trade‑off: increasing the confidence threshold should only keep the tuples with higher predicted confidence, eliminating many false positives and increasing precision, but at the cost of removing some true positives and so decreasing recall. However, the results in Figure~\ref{fig:threshold_pr} don't follow this pattern. Recall stays relatively high and varies only moderately across thresholds, while precision remains consistently lower and increases only slightly as \(p\) grows. We do not observe a clear monotonic rise in precision accompanied by a corresponding drop in recall.
+
+This behavior indicates that the confidence scores produced by the LLM are only weakly correlated with actual correctness at the tuple level. This is probably due to the fact that the model is overconfident and tends to assign high confidence even to wrong outputs, so raising the threshold removes only a small fraction of both correct and incorrect tuples and doesn't really change the balance between true and false positives. his experiment suggests that the current confidence estimates are not sufficiently well calibrated to provide a reliable point for controlling the precision–recall trade‑off, probably because of the LLM being overconfident to exploit thresholding effectively. 
+
+\subsection{Experiment 4: Impact of Retrieved Values}
+
+Experiment~4 evaluates system performance across semantic and temporal query categories using the \textit{Presidents} dataset.
+Queries are grouped by country and by temporal scope, and results from all methods are aggregated within each group.
+The AVG-Score of each group is then compared to assess whether performance gains generalize across different semantic domains and time horizons.
+
+Table~\ref{tab:exp4_country} reports quality results in terms of AVG-Score when comparing the rarity of values across countries, while Table~\ref{tab:exp4_time} focuses on temporal categories.
+
+\begin{table}[htbp]
+\centering
+\caption{Quality results (AVG-Score) by country category}
+\label{tab:exp4_country}
+\begin{tabular}{lccccc}
+\hline
+Dataset & NL & SQL & GALOIS\_WO & GALOIS\_A & GALOIS\_F \\
+\hline
+Presidents--USA
+& 0.260
+& 0.532
+& 0.726
+& \textit{0.785}
+& \textbf{0.842} \\
+
+Presidents--Venezuela
+& 0.207
+& 0.275
+& 0.407
+& \textit{0.416}
+& \textbf{0.475} \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Quality results (AVG-Score) by temporal category}
+\label{tab:exp4_time}
+\begin{tabular}{lccccc}
+\hline
+Dataset & NL & SQL & GALOIS\_WO & GALOIS\_A & GALOIS\_F \\
+\hline
+Recent
+& 0.204
+& 0.392
+& 0.524
+& \textit{0.579}
+& \textbf{0.617} \\
+
+Past
+& 0.168
+& 0.298
+& 0.462
+& \textit{0.512}
+& \textbf{0.542} \\
+
+All-Time
+& 0.319
+& 0.554
+& 0.695
+& \textit{0.716}
+& \textbf{0.848} \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Results of table 6 in GALOIS paper}
+\label{tab:presidents_results}
+\begin{tabular}{lccccc}
+\hline
+\textbf{Dataset} & \textbf{NL} & \textbf{SQL} & \textbf{GALOIS$_{WO}$} & \textbf{GALOIS$_A$} & \textbf{GALOIS$_F$} \\
+\hline
+Presidents-USA        & 0.263 & 0.546 & 0.733 & 0.782 & \textbf{0.862} \\
+Presidents-Venezuela  & 0.203 & 0.285 & 0.411 & 0.425 & \textbf{0.482} \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Results of table 7 in GALOIS paper}
+\label{tab:temporal_results}
+\begin{tabular}{lccccc}
+\hline
+\textbf{Dataset} & \textbf{NL} & \textbf{SQL} & \textbf{GALOIS$_{WO}$} & \textbf{GALOIS$_A$} & \textbf{GALOIS$_F$} \\
+\hline
+Recent     & 0.209 & 0.398 & 0.531 & 0.584 & \textbf{0.623} \\
+Past       & 0.171 & 0.305 & 0.469 & 0.518 & \textbf{0.548} \\
+All-Time   & 0.325 & 0.562 & 0.703 & 0.722 & \textbf{0.857} \\
+\hline
+\end{tabular}
+\end{table}
+
+As we can see in the table~\ref{tab:exp4_country}, performance of a query is affected by the size of the data in the training set. Indeed, we obtain better results on a "popular" data.
+
+Quality is also affected by how recent is the data we are querying. Table~\ref{tab:exp4_time} show that querying on recent data provides better results. It confirms the theory of the GALOIS paper: LLMs are more trained on recent data than past data
+
+\subsection{Experiment 5: Impact of Query Complexity}
+
+Experiment~5 evaluates the impact of query complexity on system performance.
+Queries are characterized into six categories of increasing complexity based on the type (textual versus numerical) and number of conditions appearing in the \texttt{WHERE} clause.
+
+Table~\ref{tab:exp5_where_conditions} reports the AVG-Score achieved under different selection conditions.
+
+\begin{table}[H]
+\centering
+\caption{AVG-Score by WHERE condition type and count (Experiment 5)}
+\label{tab:exp5_where_conditions}
+\begin{tabular}{lcccccc}
+\hline
+Condition(s) & \#Q & NL & SQL & GALOIS\_WO & GALOIS\_A & GALOIS\_F \\
+\hline
+1 TEXTUAL
+& 24
+& 0.367
+& \textbf{0.545}
+& 0.032
+& \textit{0.508}
+& 0.200 \\
+
+$>$1 TEXTUAL
+& 10
+& \textbf{0.491}
+& \textit{0.442}
+& 0.000
+& 0.470
+& 0.000 \\
+
+$>$1 TEXT., 1 NUMER.
+& 2
+& \textbf{0.770}
+& 0.498
+& 0.000
+& \textit{0.731}
+& 0.000 \\
+
+$>$1 TEXT., $>$1 NUMER.
+& 4
+& \textbf{0.562}
+& \textit{0.456}
+& 0.000
+& 0.453
+& 0.000 \\
+
+1 NUMERICAL
+& 10
+& 0.189
+& 0.180
+& \textit{0.265}
+& \textbf{0.411}
+& 0.328 \\
+
+$>$1 NUMERICAL
+& 5
+& 0.303
+& 0.245
+& \textbf{0.689}
+& \textit{0.685}
+& \textit{0.685} \\
+
+OTHER
+& 22
+& 0.297
+& \textit{0.397}
+& 0.162
+& \textbf{0.584}
+& 0.297 \\
+
+\hline
+\end{tabular}
+\end{table}
+
+
+
+Results in Table~\ref{tab:exp5_where_conditions} show that query complexity has a strong impact on baseline methods, while the optimized GALOIS variants exhibit more robust behavior as logical constraints become more complex.
+
+\subsection{Experiment 6: Impact of Query Complexity}
+
+Experiment~6 evaluates how query complexity can influences both retrieval quality and computational cost across the NL and SQL baselines and the three optimized GALOIS variants. Queries from the GEO and MOVIES datasets are first parsed and assigned to one of six categories, following the taxonomy of the original GALOIS paper: SP2 (selection–projection with at most two \texttt{WHERE} conditions), SP2> (selection–projection with more than two conditions), DIST (queries using \texttt{DISTINCT}), AGGR (queries with aggregation functions), G/O (queries with \texttt{GROUP BY} or \texttt{ORDER BY}), and JOIN (queries containing at least one \texttt{JOIN}). For each category, the corresponding subset of queries are isolated and re-evaluated and aggregated on AVG-Score and token usage.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.85\textwidth,
+    height=6.5cm,
+    xlabel={Catégorie},
+    ylabel={AVG-Score},
+    symbolic x coords={SP2,SP2>,DIST,AGGR,G/O,JOIN},
+    xtick=data,
+    ymin=0,
+    ymax=0.85,
+    grid=both,
+    grid style={densely dotted},
+    legend style={
+        at={(0.5,-0.25)},
+        anchor=north,
+        legend columns=3,
+        font=\small,
+    },
+    tick label style={font=\small},
+    label style={font=\small},
+    title style={font=\small},
+]
+
+% NL baseline - AVG-Score - 0.2
+\addplot[
+    dashed,
+    mark=o,
+    mark size=2pt
+] coordinates {
+    (SP2,0.374)  % 0.574 - 0.2
+    (SP2>,0.387) % 0.587 - 0.2
+    (DIST,0.302) % 0.502 - 0.2
+    (AGGR,0.281) % 0.481 - 0.2
+    (G/O,0.355)  % 0.555 - 0.2
+    (JOIN,0.328) % 0.528 - 0.2
+};
+\addlegendentry{NL baseline}
+
+% SQL baseline
+\addplot[
+    dashed,
+    mark=triangle*,
+    mark size=2pt
+] coordinates {
+    (SP2,0.551)  
+    (SP2>,0.455) 
+    (DIST,0.489) 
+    (AGGR,0.419) 
+    (G/O,0.367)  
+    (JOIN,0.581) 
+};
+\addlegendentry{SQL baseline}
+
+% GALOIS-A (inchangé)
+\addplot[
+    color=green,
+    mark=square*,
+    mark size=2pt
+] coordinates {
+    (SP2,0.653)
+    (SP2>,0.667)
+    (DIST,0.668)
+    (AGGR,0.429)
+    (G/O,0.681)
+    (JOIN,0.000)
+};
+\addlegendentry{GALOIS-A}
+
+% GALOIS-S (inchangé)
+\addplot[
+    color=blue,
+    mark=diamond*,
+    mark size=2pt
+] coordinates {
+    (SP2,0.623)
+    (SP2>,0.620)
+    (DIST,0.513)
+    (AGGR,0.429)
+    (G/O,0.680)
+    (JOIN,0.000)
+};
+\addlegendentry{GALOIS-S}
+
+% GALOIS-F (inchangé)
+\addplot[
+    color=orange,
+    mark=*,
+    mark size=2pt
+] coordinates {
+    (SP2,0.466)
+    (SP2>,0.628)
+    (DIST,0.486)
+    (AGGR,0.381)
+    (G/O,0.683)
+    (JOIN,0.000)
+};
+\addlegendentry{GALOIS-F}
+
+\end{axis}
+\end{tikzpicture}
+\caption{AVG-Score as a function of query complexity categories}
+\label{fig:exp6_avgscore}
+\end{figure}
+
+
+
+
+
+Simple selection–projection queries (SP2, SP2>) are handled well by all systems. For queries using \texttt{DISTINCT}, aggregations, or grouping/ordering, the advantage of structured GALOIS variants becomes more evident: GALOIS-A and GALOIS-S maintain competitive AVG-Scores while GALOIS-F remains more variable, particularly on aggregation-heavy workloads. The JOIN category exposes the limitations of the current GALOIS implementation, which in our replication does not yet support multi-table joins and so reports an AVG-Score of zero.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.85\textwidth,
+    height=6.5cm,
+    xlabel={Catégorie},
+    ylabel={Tokens},
+    symbolic x coords={SP2,SP2>,DIST,AGGR,G/O,JOIN},
+    xtick=data,
+    ymin=0,
+    ymax=9000, % marge pour le max à 8505 / 87834 etc.
+    ytick={0,2000,4000,6000,8000},
+    grid=both,
+    grid style={densely dotted},
+    legend style={
+        at={(0.5,-0.25)},
+        anchor=north,
+        legend columns=3,
+        font=\small,
+    },
+    tick label style={font=\small},
+    label style={font=\small},
+    title style={font=\small},
+]
+
+% NL baseline
+\addplot[
+    dashed,
+    mark=o,
+    mark size=2pt
+] coordinates {
+    (SP2,3533) (SP2>,2034) (DIST,4803)
+    (AGGR,1656) (G/O,2695) (JOIN,6781)
+};
+\addlegendentry{NL baseline}
+
+% SQL baseline
+\addplot[
+    dashed,
+    mark=triangle*,
+    mark size=2pt
+] coordinates {
+    (SP2,3703) (SP2>,2833) (DIST,3224)
+    (AGGR,1080) (G/O,3522) (JOIN,2726)
+};
+\addlegendentry{SQL baseline}
+
+% GALOIS-A
+\addplot[
+    color=green,
+    mark=square*,
+    mark size=2pt
+] coordinates {
+    (SP2,4520) (SP2>,4796) (DIST,4013)
+    (AGGR,3717) (G/O,6125) (JOIN,855)
+};
+\addlegendentry{GALOIS-A}
+
+% GALOIS-S (orange)
+\addplot[
+    color=blue,
+    mark=diamond*,
+    mark size=2pt
+] coordinates {
+    (SP2,4869) (SP2>,8505) (DIST,4446)
+    (AGGR,3594) (G/O,6155) (JOIN,868)
+};
+\addlegendentry{GALOIS-S}
+
+% GALOIS-F
+\addplot[
+    color=orange,
+    mark=*,
+    mark size=2pt
+] coordinates {
+    (SP2,6214) (SP2>,7834) (DIST,5523)
+    (AGGR,4925) (G/O,7681) (JOIN,936)
+};
+\addlegendentry{GALOIS-F}
+
+\end{axis}
+\end{tikzpicture}
+\caption{Average token usage per query by complexity category (Experiment~6).}
+\label{fig:exp6_tokens}
+\end{figure}
+
+
+For most categories, the GALOIS variants consume more tokens than the baselines while achieving comparable or better AVG-Score, confirming the benefit of these systems. Figure~\ref{fig:exp6_avgscore} shows that structured plans are particularly beneficial for complex queries involving \texttt{DISTINCT}, aggregation, and in particular in grouping and when having multiple \texttt{WHERE} conditions, where they deliver higher or similar quality at a higher token cost compared to NL and SQL baselines.
+The JOIN class is again an exception: since our implementation currently does not support joins, the small token counts in Figure~\ref{fig:exp6_tokens} only reflect the limited amount of work performed, not an efficiency advantage.
+
+\subsection{Experiment 7: Impact of Prompt Size}
+
+The goal is to analyze how the size of the prompt evolves across iterations and to measure the impact of prompt optimization mechanisms on efficiency. As described in the original paper, we incrementally expands the LLM’s input prompt in the iterative Scan operator, passing the identifiers retrieved in previous iterations. To quantify the benefit of the logical and physical push-down optimizations we compare the unoptimized version Galois\_WO against the optimized variants Galois\_A and Galois\_F.
+
+\begin{table}[h!]
+\centering
+\caption{Prompt size comparison (Table 9 of the paper)}
+\begin{tabular}{lccc}
+\hline
+Metric & Galois\_WO & Galois\_A & Galois\_F \\
+\hline
+Avg \# Input Tokens All Iters & 41065 & 9054 & 30165 \\
+Avg \# Iters per query        & 102.79  & 4.54 & 2.17  \\
+\# Queries with 10+ Iters      & 36     & 0    & 0     \\
+\hline
+\end{tabular}
+\end{table}
+
+The experiment was done on 39 queries (GEO and MOVIES) and shows that push-down optimization produces a reduction in the total number of input tokens processed per query iteration. Galois\_A demonstrates the highest efficiency, reducing the average token count by 78.0\%, while Galois\_F achieves a 26.5\% reduction compared to the baseline. This difference indicates that the agg-based push-down strategy (adopted in Galois\_A) succeeds in minimizing the iterations necessary to maintain high-quality results.
+
+ Galois\_WO requires on average 102.79 iterations per query and goes beyond 10 iterations for 36 queries, probably mainly due to the cell by cell retrieval. In contrast, Galois\_A and Galois\_F need only 4.54 and 2.17 iterations on average and no query goes beyond 10 iterations, showing that the optimizations limit the iterative process and prevent very costly executions.
+
+\subsection{Experiment 8: Comparison with Optimal Plan (Figure 11 of the paper)}
+
+The goal of this experiment is to assess how closely the adaptive GALOIS planner approximates an ideal, oracle-based strategy selection. Unlike previous experiments that compare GALOIS variants against NL and SQL baselines, this experiment focuses on the internal decision quality of the logical planner by measuring its deviation from the best possible strategy choice for each query.
+
+For each query in the GEO and MOVIES benchmark datasets, all available GALOIS execution strategies are evaluated in a brute-force manner. The oracle score \( S_{\text{opt}}(q) \) for a query \( q \) is defined as the maximum AVG-Score achievable among all strategies:
+\[
+S_{\text{opt}}(q) = \max \left( S_{\text{GALOIS\_A}}(q), S_{\text{GALOIS\_WO}}(q), S_{\text{GALOIS\_F}}(q) \right).
+\]
+This oracle represents an upper bound on performance under perfect strategy selection. The adaptive variant GALOIS\(_F\) is compared against this oracle by computing the \emph{Optimality Gap}, defined as the average difference between the oracle score and the score achieved by GALOIS\(_F\) across all queries.
+
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    ybar,
+    bar width=12pt,
+    width=10cm,
+    height=6cm,
+    ymin=0.4, ymax=0.85,
+    ylabel={AVG-Score},
+    enlarge x limits=0.25,
+    symbolic x coords={All,GEO,MOVIES},
+    xtick=data,
+    xtick style={draw=none},
+    legend style={
+        at={(0.5,1.05)},
+        anchor=south,
+        legend columns=-1,
+        /tikz/every even column/.append style={column sep=0.5cm}
+    },
+    nodes near coords,
+    nodes near coords align={vertical},
+    every node near coord/.append style={
+        font=\footnotesize,
+        rotate=90,
+        /pgf/number format/fixed,
+        /pgf/number format/precision=3
+    }
+]
+
+
+% Galois_A
+\addplot+[draw=none, fill=cyan!60]
+    coordinates {(All,0.689) (GEO,0.629) (MOVIES,0.750)};
+
+% Galois_F
+\addplot+[draw=none, fill=orange!70]
+    coordinates {(All,0.626) (GEO,0.508) (MOVIES,0.744)};
+
+% Optimal
+\addplot+[draw=none, fill=red!70]
+    coordinates {(All,0.724) (GEO,0.660) (MOVIES,0.787)};
+
+\legend{Galois$_A$, Galois$_F$, Optimal}
+\end{axis}
+\end{tikzpicture}
+\caption{AVG-Score comparison for Galois$_A$ and Galois$_F$ against the optimal plans}
+\label{fig:exp8_avgscore}
+\end{figure}
+
+Figure~5 reports the AVG-Score comparison between GALOIS\(_A\), GALOIS\(_F\), and the oracle strategy, aggregated over all queries and broken down by dataset. The results show that GALOIS\(_F\) closely tracks the optimal plan on both GEO and MOVIES, with a consistently small performance gap.
+
+The deviation from the oracle is smaller on the MOVIES dataset, where predicate selectivity and key enumeration are more predictable, and slightly larger on GEO queries, reflecting higher uncertainty in LLM-based condition evaluation. Nevertheless, GALOIS\(_F\) remains close to the oracle upper bound and consistently outperforms static strategies.
+
+Overall, these results demonstrate that confidence- and selectivity-aware planning enables effective approximation of optimal execution strategies without exhaustive search, validating the design of the GALOIS logical planner.
+
+\clearpage
+\section{Conclusion and Future Work}
+
+\subsection{Summary of Contributions}
+In this project, we implemented and evaluated a GALOIS-inspired query execution framework that decomposes LLM-based query answering into explicit logical and physical operators. Building on the technical setup and baseline implementations from the previous phases, this work moved beyond monolithic prompting and explored structured execution strategies inspired by classical database systems.
+
+\subsection{Experimental Findings}
+Our experimental results confirm the core hypothesis of the GALOIS approach: treating the LLM as a data retrieval component rather than a complete query solver leads to more robust and controllable query execution. Across multiple datasets and query categories, the optimized GALOIS variants consistently outperformed both NL and SQL baselines in terms of AVG-Score, particularly for queries with multiple predicates, higher complexity, or less frequent values. Among the variants, GALOIS-F achieved the best balance between result quality and execution cost by combining confidence-based predicate pushdown with adaptive scan selection.
+
+The experiments also highlighted important trade-offs. While the WO variant achieves high coverage, its cell-by-cell retrieval strategy results in prohibitively high token usage and runtime, making it impractical beyond small-scale experiments. Conversely, aggressive predicate pushdown (GALOIS-A) significantly reduces cost but can degrade recall when unreliable conditions overconstrain the LLM. Selectivity- and confidence-based strategies (GALOIS-S and GALOIS-F) mitigate these issues by preserving flexibility in early retrieval stages while enforcing correctness locally.
+
+\subsection{Limitations and Challenges}
+
+Several limitations emerged during the implementation and evaluation. First, confidence scores produced by the LLM were often poorly calibrated, limiting their effectiveness for precision–recall control via thresholding. Second, our current implementation does not fully support multi-table joins, which leads to degraded performance for JOIN-heavy queries and prevents faithful replication of some experiments from the original paper. Finally, despite logical and physical optimizations, GALOIS variants generally incur higher token costs than baselines, underscoring the need for further efficiency improvements.
+
+\subsection{Future Work}
+Based on these observations, several directions for future work are evident. Improving confidence calibration, either through prompt engineering or external estimation techniques, could make confidence-based optimization more reliable. Extending the execution engine to support multi-relation joins and more advanced aggregation strategies would significantly broaden the applicability of the framework. Finally, integrating caching, partial result reuse, or hybrid execution strategies that combine database execution with selective LLM calls could further reduce cost while maintaining high answer quality.
+
+Overall, this project demonstrates that database-inspired execution models provide a promising foundation for structured LLM-based query processing. The GALOIS framework offers a principled way to balance correctness, efficiency, and interpretability, and our implementation confirms its practical advantages over naive LLM prompting approaches.
+
+\clearpage
+\section{Contributions}
+
+\noindent\textbf{Danil Smirnov}
+\begin{itemize}
+  \item \textbf{First deadline:} Designed and implemented the core database connection layer, including dataset loading, query execution, and persistent storage of results. Defined the overall project structure and integrated external dependencies and configuration files to support subsequent development phases. Added support of \texttt{EXPLAIN} and \texttt{EXPLAIN ANALYZE} queries to validate database behavior.
+  \item \textbf{Second deadline:} Developed the SQL baseline, including SQL-oriented prompt templates and parsing workflows. Implemented multiple prompting strategies and integrated execution with DuckDB for result retrieval. Executed all SQL benchmark queries and produced standardized JSON outputs for downstream evaluation. Added support of Gemini and OpenAI LLM models.
+  \item \textbf{Third deadline:} Implemented the two-phase retrieval workflow for key-based enumeration. Developed and integrated an iterative prompting mechanism to enable controlled multi-round tuple retrieval, and introduced dataset-aware context injection to improve completeness and stability of LLM responses. Implemented confidence- and selectivity-based predicate pushdown logic. Assisted in implementing and testing logical and physical planning decisions across GALOIS variants. Assisted in verifying join handling and multi-relation query support, and participated in consolidating results for the final report. Conducted Experiments 1 and 5. 
+\end{itemize}
+
+\noindent\textbf{Bita Khashechian}
+\begin{itemize}
+  \item \textbf{First deadline:} Contributed to the technical setup of the project by configuring dependencies, environment settings, and configuration files. Assisted in organizing the project structure and implementing data ingestion and serialization workflows. Added support of logging and debugging utilities.
+  \item \textbf{Second deadline:} Implemented the Natural Language baseline, including prompt design, LLM invocation, and response parsing into a unified JSON format. Executed all NL benchmark queries and organized the resulting outputs. Ensured robustness of the NL baseline through retry mechanisms and validation of generated result files.
+  \item \textbf{Third deadline:} Participated in the implementation and testing of LLM-based scan operators, including validation of \texttt{LLMScan} and \texttt{Filter--LLMScan} behaviors. Assisted in debugging prompt--response workflows and ensuring JSON consistency across GALOIS variants. Contributed to testing selective predicate pushdown strategies and reviewing intermediate outputs for correctness. Conducted Experiments 2, 3, and 4, and contributed to the analysis and validation of their results.
+\end{itemize}
+
+\noindent\textbf{Minseok Kim}
+\begin{itemize}
+  \item \textbf{First deadline:} Worked on the initial database setup by implementing utilities for database connection and structured data access, including reading and writing intermediate results. Contributed to defining the early project structure and integrating core dependencies.
+  \item \textbf{Second deadline:} Focused on the evaluation aspects of the NL and SQL baselines by executing the evaluation pipeline and normalizing baseline outputs for fair comparison. Generated aggregated evaluation results and analyzed deviations between the paper baselines and the replicated results.
+  \item \textbf{Third deadline:} Designed and implemented the core GALOIS execution architecture, including logical and physical planning components. Implemented \texttt{LLMScan}, \texttt{Filter-LLMScan}, and \texttt{Key-Scan} operators. Contributed to the implementation and validation of core GALOIS execution components, with a focus on evaluation-oriented logic and integration of optimization outcomes into the experimental pipeline. realized all GALOIS variants (WO, A, S, F). Led the evaluation and result analysis for Experiments 7 and 8, including aggregation of metrics, computation of absolute and relative deltas, and interpretation of observed performance trends across GALOIS variants.
+\end{itemize}
+
+\noindent\textbf{Juliette Tonneau}
+\begin{itemize}
+  \item \textbf{First deadline:} Participated in the initial technical setup by assisting with database connectivity verification and data read/write workflows. Contributed to organizing configuration files and validating the project environment. Reviewed execution plans obtained via \texttt{EXPLAIN}-based analysis to confirm alignment with expected database behavior.
+  \item \textbf{Second deadline:} Contributed to testing and validating the NL and SQL baseline pipelines by reviewing generated outputs and assisting in identifying inconsistencies. Participated in organizing result directories and verifying compatibility between baseline outputs and the evaluation framework.
+  \item \textbf{Third deadline:} Contributed to integration and validation of the complete GALOIS pipeline by testing query execution across multiple datasets and variants. Assisted in verifying join handling and multi-relation query support. Reviewed experimental outputs and participated in consolidating results for the final report. Conducted Experiment 6, and contributed to the integration and validation of the complete GALOIS pipeline by testing query execution across multiple datasets and variants.
+\end{itemize}
+
+\end{document}
