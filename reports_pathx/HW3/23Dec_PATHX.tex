@@ -618,6 +618,53 @@ Avg Time (s)
 \end{tabular}
 \end{table}
 
+\begin{table}[htbp]
+\centering
+\label{tab:diff_my_vs_paper}
+\begin{tabular}{lcccccc}
+\hline
+Metric & System & Paper & Ours & Abs.\ Diff. & Rel.\ Diff. \\
+\hline
+F1-Cell & NL            & 0.237 & 0.315   & 0.078   & 0.329 \\
+        & GALOIS$_{WO}$ & 0.518 & 0.233   & 0.285   & -0.550 \\
+        & GALOIS$_S$    & 0.480 & 0.500   & 0.020   & 0.042 \\
+        & GALOIS$_A$    & 0.543 & 0.520   & 0.023   & -0.042 \\
+        & GALOIS$_F$    & 0.563 & 0.435   & 0.128   & -0.227 \\
+\hline
+Cardinality & NL            & 0.462 & 0.517   & 0.055   & 0.119 \\
+            & GALOIS$_{WO}$ & 0.691 & 0.288   & 0.403   & -0.583 \\
+            & GALOIS$_S$    & 0.655 & 0.609   & 0.046   & -0.070 \\
+            & GALOIS$_A$    & 0.799 & 0.711   & 0.088   & -0.110 \\
+            & GALOIS$_F$    & 0.835 & 0.567   & 0.268   & -0.321 \\
+\hline
+Tuple Constr. & NL            & 0.065 & 0.116   & 0.051   & 0.785 \\
+              & GALOIS$_{WO}$ & 0.389 & 0.105   & 0.284   & -0.730 \\
+              & GALOIS$_S$    & 0.365 & 0.300   & 0.065   & -0.178 \\
+              & GALOIS$_A$    & 0.448 & 0.330   & 0.118   & -0.263 \\
+              & GALOIS$_F$    & 0.464 & 0.247   & 0.217   & -0.468 \\
+\hline
+AVG-Score & NL            & 0.254 & 0.316   & 0.062   & 0.244 \\
+          & GALOIS$_{WO}$ & 0.531 & 0.209   & 0.322   & -0.606 \\
+          & GALOIS$_S$    & 0.500 & 0.469   & 0.031   & -0.062 \\
+          & GALOIS$_A$    & 0.592 & 0.521   & 0.071   & -0.120 \\
+          & GALOIS$_F$    & 0.622 & 0.416   & 0.206   & -0.331 \\
+\hline
+\#Tokens (M) & NL            & 0.83  & 0.191   & 0.639   & -0.770 \\
+             & GALOIS$_{WO}$ & 19.71 & 2.078   & 17.632  & -0.895 \\
+             & GALOIS$_S$    & 0.96  & 0.378   & 0.582   & -0.606 \\
+             & GALOIS$_A$    & 0.95  & 0.366   & 0.584   & -0.615 \\
+             & GALOIS$_F$    & 1.72  & 0.515   & 1.205   & -0.700 \\
+\hline
+Avg Time (s) & NL            & 120   & 20.304  & 99.696  & -0.831 \\
+             & GALOIS$_{WO}$ & 1460  & 232.374 & 1227.626& -0.841 \\
+             & GALOIS$_S$    & 130   & 28.836  & 101.164 & -0.778 \\
+             & GALOIS$_A$    & 120.5 & 29.535  & 90.965  & -0.755 \\
+             & GALOIS$_F$    & 47.4  & 77.247  & 29.847  & 0.630 \\
+\hline
+\end{tabular}
+\caption{Absolute and relative differences between our results and GALOIS 
+Table~\ref{tab:galois_table3}}
+\end{table}
 
 
 In the results, we observe that the optimized GALOIS variants consistently outperform the NL and SQL baselines in terms of AVG-Score, confirming the effectiveness of structured execution strategies over monolithic prompting.
