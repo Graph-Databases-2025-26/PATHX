@@ -23,6 +23,7 @@
 
 \tableofcontents
 
+\clearpage
 \section{GALOIS Features: Introduction and Scope}
 
 \subsection{Context and Motivation}
@@ -41,6 +42,7 @@ Within this scope, we implement several GALOIS variants that differ in their opt
 
 This section covers the design, implementation, and evaluation of the GALOIS operators and variants. The objective is not to fully reproduce a production-ready query optimizer, but to demonstrate how classical database execution concepts can be adapted to LLM-based query processing, and to analyze their practical impact compared to the NL and SQL baselines introduced earlier.
 
+\clearpage
 \section{Data and Ground–Truth Construction}
 
 Ground truth is constructed in \texttt{build\_ground\_truth.py}. The script takes the raw CSV data of each benchmark dataset (such as \texttt{world}, \texttt{movies}, \texttt{flight-2}, \texttt{flight-4}) and converts them into DuckDB tables. Where needed, explicit schemas are defined; for example, the movies dataset requires types for numeric and temporal columns. When CSV file names do not match the table names used in the benchmark queries, the script creates simple views so that the original SQL remains valid.
@@ -53,6 +55,7 @@ These JSON files serve as the gold–standard answers for all later evaluations.
 
 A separate utility module, \texttt{dataset\_io.py}, encapsulates the discovery of datasets and loading of the SQL files. It enumerates dataset directories, reads the queries from their \texttt{queries\_*.sql} files, and also supports loading natural–language questions for the NL baseline when such text files are available.
 
+\clearpage
 \section{Baselines}
 
 \subsection{Non–iterative baseline behaviour}
@@ -87,6 +90,7 @@ Avg Time (s)   & 120.0 & 21.25 & -98.75 & -82.3\% \\
 \caption{NL baseline comparison between the paper and our implementation using Llama-3.3-70B.}
 \end{table}
 
+\clearpage
 \begin{table}[h]
 \centering
 \label{tab:sql}
@@ -109,6 +113,7 @@ Avg Time (s)   & 61.4  & 11.0 & -50.4 & -82.1\% \\
 
 The script \texttt{run\_baselines\_and\_compare.py} orchestrates the NL and SQL baselines. It selects a provider and strategy, runs the baselines on the chosen datasets, and then calls a comparison routine that evaluates their outputs against ground truth using the same metrics later used for GALOIS. These baselines serve as the reference execution model that GALOIS later decomposes into explicit operators.
 
+\clearpage
 \section{Prompt Construction and LLM Orchestration}
 \label{sec:prompt_orchestration}
 
@@ -137,7 +142,7 @@ LangChain serves as the execution backbone that connects our Python operators to
 
 For the two-phase retrieval used by Key--Scan, LangChain simply executes the phases as an explicit sequence of calls: first the system prompts for key values satisfying the conditions, and then it iterates over the retrieved keys and issues tuple--completion (or cell--level) prompts to obtain the remaining attributes. Using a single shared execution layer for all calls also simplifies logging and ensures consistent time and token accounting across strategies.
 
-
+\clearpage
 \section{LLMScan and Physical Scan Operators}
 
 In the GALOIS paper, LLMScan is a logical operator that retrieves tuples via an LLM. In our system, LLMScan is implemented by two concrete physical operators, both inheriting from \texttt{BaseScanOperator}: a Table–Scan operator and a Key–Scan operator.
@@ -206,6 +211,7 @@ Key–Scan, implemented in \texttt{key\_scan.py}, splits retrieval into two phas
 
 This two–phase strategy generally achieves higher quality tuples because the second–phase prompts are very focused. The drawback is the higher cost: at least one LLM call is needed per key to complete the tuple. In the experiments, time and tokens from both phases are aggregated, and the metadata records how many keys were found and that Key–Scan was used.
 
+\clearpage
 \section{Logical Optimization and WHERE–Clause Evaluation}
 
 \subsection{Predicate pushdown}
@@ -230,6 +236,7 @@ Our implementation also includes a complete WHERE–clause evaluator used for in
 
 This evaluator ensures that, regardless of what the LLM does, the final result respects the original boolean expression in the SQL query.
 
+\clearpage
 \section{GALOIS Variants}
 
 The four main GALOIS variants are implemented as separate classes: \texttt{GaloisWO}, \texttt{GaloisA}, \texttt{GaloisS}, and \texttt{GaloisF}. Each takes a dataset, table, list of attributes, and WHERE clause, and returns a result set with metadata. All variants first extend the attribute list to include any columns that appear in the WHERE clause. After the scan operator runs, they reapply the full WHERE clause locally and then project the tuples down to the attributes requested by the original query.
@@ -264,6 +271,7 @@ in line with the paper's idea of normalizing confidence by query width. This val
 
 The chosen scan operator runs with the pushed conditions. The full WHERE clause is again re–applied locally, and the output is projected to the original attributes. Metadata includes the per–condition confidence labels, the pushed subset, $c$, $\mathrm{conf}(q)$, the threshold $\tau$, and the choice of scan operator.
 
+\clearpage
 \section{Experimental Pipeline}
 This section describes the sequence of steps used to run all experiments. The same procedure was followed for every run, beginning with the construction of the ground-truth data, continuing through dataset ingestion and baseline evaluation, and ending with the execution of the GALOIS-inspired query engine.
 Unless otherwise stated, all runs in this pipeline use the same LLM backend (Llama-3.3-70B) for the NL baseline, SQL baseline, and all GALOIS operator variants.
@@ -332,7 +340,7 @@ python -m src.galois.experiments.exp1_table \
 
 This comparison illustrates the difference between monolithic prompting and structured, operator-guided execution.
 
-
+\clearpage
 \section{Numerical Results}
 
 \subsection{EU Cities Example}
@@ -458,7 +466,8 @@ Here only high–selectivity conditions are pushed down. The result set now incl
 
 \paragraph{Galois F:}
 
-\begin{table}[h]
+\clearpage
+\begin{table}[t]
 \centering
 \begin{tabular}{l l r r}
 \toprule
@@ -478,9 +487,10 @@ Dublin    & Ireland          & 1173179 & 19 \\
 \caption{EU Cities result set for the \texttt{Galois\_F} variant using AZURE gpt-4o.}
 \end{table}
 
+
 The fully optimized F variant retrieves the largest set of correct tuples among all iterative plans while keeping token usage moderate. It uncovers cities such as Barcelona, Munich, Warsaw, and Dublin that require deeper exploration of the model’s internal knowledge. The combination of confidence–based pushdown and adaptive choice between Key–Scan and Table–Scan appears to be effective.
 
-
+\clearpage
 \section{Experiments}
 
 This section describes in more detail the experiments presented in the GALOIS paper to demonstrate the quality of the proposed approach.
@@ -1269,6 +1279,15 @@ The experiment was done on 39 queries (GEO and MOVIES) and shows that push-down 
 
 \subsection{Experiment 8: Comparison with Optimal Plan (Figure 11 of the paper)}
 
+The goal of this experiment is to assess how closely the adaptive GALOIS planner approximates an ideal, oracle-based strategy selection. Unlike previous experiments that compare GALOIS variants against NL and SQL baselines, this experiment focuses on the internal decision quality of the logical planner by measuring its deviation from the best possible strategy choice for each query.
+
+For each query in the GEO and MOVIES benchmark datasets, all available GALOIS execution strategies are evaluated in a brute-force manner. The oracle score \( S_{\text{opt}}(q) \) for a query \( q \) is defined as the maximum AVG-Score achievable among all strategies:
+\[
+S_{\text{opt}}(q) = \max \left( S_{\text{GALOIS\_A}}(q), S_{\text{GALOIS\_WO}}(q), S_{\text{GALOIS\_F}}(q) \right).
+\]
+This oracle represents an upper bound on performance under perfect strategy selection. The adaptive variant GALOIS\(_F\) is compared against this oracle by computing the \emph{Optimality Gap}, defined as the average difference between the oracle score and the score achieved by GALOIS\(_F\) across all queries.
+
+
 \begin{figure}[ht]
 \centering
 \begin{tikzpicture}
@@ -1319,37 +1338,61 @@ The experiment was done on 39 queries (GEO and MOVIES) and shows that push-down 
 \label{fig:exp8_avgscore}
 \end{figure}
 
+Figure~5 reports the AVG-Score comparison between GALOIS\(_A\), GALOIS\(_F\), and the oracle strategy, aggregated over all queries and broken down by dataset. The results show that GALOIS\(_F\) closely tracks the optimal plan on both GEO and MOVIES, with a consistently small performance gap.
 
-\section{Conclusion}
+The deviation from the oracle is smaller on the MOVIES dataset, where predicate selectivity and key enumeration are more predictable, and slightly larger on GEO queries, reflecting higher uncertainty in LLM-based condition evaluation. Nevertheless, GALOIS\(_F\) remains close to the oracle upper bound and consistently outperforms static strategies.
 
+Overall, these results demonstrate that confidence- and selectivity-aware planning enables effective approximation of optimal execution strategies without exhaustive search, validating the design of the GALOIS logical planner.
+
+\clearpage
+\section{Conclusion and Future Work}
+
+\subsection{Summary of Contributions}
+In this project, we implemented and evaluated a GALOIS-inspired query execution framework that decomposes LLM-based query answering into explicit logical and physical operators. Building on the technical setup and baseline implementations from the previous phases, this work moved beyond monolithic prompting and explored structured execution strategies inspired by classical database systems.
+
+\subsection{Experimental Findings}
+Our experimental results confirm the core hypothesis of the GALOIS approach: treating the LLM as a data retrieval component rather than a complete query solver leads to more robust and controllable query execution. Across multiple datasets and query categories, the optimized GALOIS variants consistently outperformed both NL and SQL baselines in terms of AVG-Score, particularly for queries with multiple predicates, higher complexity, or less frequent values. Among the variants, GALOIS-F achieved the best balance between result quality and execution cost by combining confidence-based predicate pushdown with adaptive scan selection.
+
+The experiments also highlighted important trade-offs. While the WO variant achieves high coverage, its cell-by-cell retrieval strategy results in prohibitively high token usage and runtime, making it impractical beyond small-scale experiments. Conversely, aggressive predicate pushdown (GALOIS-A) significantly reduces cost but can degrade recall when unreliable conditions overconstrain the LLM. Selectivity- and confidence-based strategies (GALOIS-S and GALOIS-F) mitigate these issues by preserving flexibility in early retrieval stages while enforcing correctness locally.
+
+\subsection{Limitations and Challenges}
+
+Several limitations emerged during the implementation and evaluation. First, confidence scores produced by the LLM were often poorly calibrated, limiting their effectiveness for precision–recall control via thresholding. Second, our current implementation does not fully support multi-table joins, which leads to degraded performance for JOIN-heavy queries and prevents faithful replication of some experiments from the original paper. Finally, despite logical and physical optimizations, GALOIS variants generally incur higher token costs than baselines, underscoring the need for further efficiency improvements.
+
+\subsection{Future Work}
+Based on these observations, several directions for future work are evident. Improving confidence calibration, either through prompt engineering or external estimation techniques, could make confidence-based optimization more reliable. Extending the execution engine to support multi-relation joins and more advanced aggregation strategies would significantly broaden the applicability of the framework. Finally, integrating caching, partial result reuse, or hybrid execution strategies that combine database execution with selective LLM calls could further reduce cost while maintaining high answer quality.
+
+Overall, this project demonstrates that database-inspired execution models provide a promising foundation for structured LLM-based query processing. The GALOIS framework offers a principled way to balance correctness, efficiency, and interpretability, and our implementation confirms its practical advantages over naive LLM prompting approaches.
+
+\clearpage
 \section{Contributions}
 
 \noindent\textbf{Danil Smirnov}
 \begin{itemize}
   \item \textbf{First deadline:} Designed and implemented the core database connection layer, including dataset loading, query execution, and persistent storage of results. Defined the overall project structure and integrated external dependencies and configuration files to support subsequent development phases. Added support of \texttt{EXPLAIN} and \texttt{EXPLAIN ANALYZE} queries to validate database behavior.
   \item \textbf{Second deadline:} Developed the SQL baseline, including SQL-oriented prompt templates and parsing workflows. Implemented multiple prompting strategies and integrated execution with DuckDB for result retrieval. Executed all SQL benchmark queries and produced standardized JSON outputs for downstream evaluation. Added support of Gemini and OpenAI LLM models.
-  \item \textbf{Third deadline:} Implemented the two-phase retrieval workflow for key-based enumeration. Developed and integrated an iterative prompting mechanism to enable controlled multi-round tuple retrieval, and introduced dataset-aware context injection to improve completeness and stability of LLM responses. Implemented confidence- and selectivity-based predicate pushdown logic. Assisted in implementing and testing logical and physical planning decisions across GALOIS variants. Conducted experimental runs, analyzed results, and authored the GALOIS features.
+  \item \textbf{Third deadline:} Implemented the two-phase retrieval workflow for key-based enumeration. Developed and integrated an iterative prompting mechanism to enable controlled multi-round tuple retrieval, and introduced dataset-aware context injection to improve completeness and stability of LLM responses. Implemented confidence- and selectivity-based predicate pushdown logic. Assisted in implementing and testing logical and physical planning decisions across GALOIS variants. Assisted in verifying join handling and multi-relation query support, and participated in consolidating results for the final report. Conducted Experiments 1 and 5. 
 \end{itemize}
 
 \noindent\textbf{Bita Khashechian}
 \begin{itemize}
   \item \textbf{First deadline:} Contributed to the technical setup of the project by configuring dependencies, environment settings, and configuration files. Assisted in organizing the project structure and implementing data ingestion and serialization workflows. Added support of logging and debugging utilities.
   \item \textbf{Second deadline:} Implemented the Natural Language baseline, including prompt design, LLM invocation, and response parsing into a unified JSON format. Executed all NL benchmark queries and organized the resulting outputs. Ensured robustness of the NL baseline through retry mechanisms and validation of generated result files.
-  \item \textbf{Third deadline:} Participated in the implementation and testing of LLM-based scan operators, including validation of \texttt{LLMScan} and \texttt{Filter--LLMScan} behaviors. Assisted in debugging prompt--response workflows and ensuring JSON consistency across GALOIS variants. Contributed to testing selective predicate pushdown strategies and reviewing intermediate outputs for correctness.
+  \item \textbf{Third deadline:} Participated in the implementation and testing of LLM-based scan operators, including validation of \texttt{LLMScan} and \texttt{Filter--LLMScan} behaviors. Assisted in debugging prompt--response workflows and ensuring JSON consistency across GALOIS variants. Contributed to testing selective predicate pushdown strategies and reviewing intermediate outputs for correctness. Conducted Experiments 2, 3, and 4, and contributed to the analysis and validation of their results.
 \end{itemize}
 
 \noindent\textbf{Minseok Kim}
 \begin{itemize}
   \item \textbf{First deadline:} Worked on the initial database setup by implementing utilities for database connection and structured data access, including reading and writing intermediate results. Contributed to defining the early project structure and integrating core dependencies.
   \item \textbf{Second deadline:} Focused on the evaluation aspects of the NL and SQL baselines by executing the evaluation pipeline and normalizing baseline outputs for fair comparison. Generated aggregated evaluation results and analyzed deviations between the paper baselines and the replicated results.
-  \item \textbf{Third deadline:} Designed and implemented the core GALOIS execution architecture, including logical and physical planning components. Implemented \texttt{LLMScan}, \texttt{Filter-LLMScan}, and \texttt{Key-Scan} operators. Contributed to the implementation and validation of core GALOIS execution components, with a focus on evaluation-oriented logic and integration of optimization outcomes into the experimental pipeline. realized all GALOIS variants (WO, A, S, F).
+  \item \textbf{Third deadline:} Designed and implemented the core GALOIS execution architecture, including logical and physical planning components. Implemented \texttt{LLMScan}, \texttt{Filter-LLMScan}, and \texttt{Key-Scan} operators. Contributed to the implementation and validation of core GALOIS execution components, with a focus on evaluation-oriented logic and integration of optimization outcomes into the experimental pipeline. realized all GALOIS variants (WO, A, S, F). Led the evaluation and result analysis for Experiments 7 and 8, including aggregation of metrics, computation of absolute and relative deltas, and interpretation of observed performance trends across GALOIS variants.
 \end{itemize}
 
 \noindent\textbf{Juliette Tonneau}
 \begin{itemize}
   \item \textbf{First deadline:} Participated in the initial technical setup by assisting with database connectivity verification and data read/write workflows. Contributed to organizing configuration files and validating the project environment. Reviewed execution plans obtained via \texttt{EXPLAIN}-based analysis to confirm alignment with expected database behavior.
   \item \textbf{Second deadline:} Contributed to testing and validating the NL and SQL baseline pipelines by reviewing generated outputs and assisting in identifying inconsistencies. Participated in organizing result directories and verifying compatibility between baseline outputs and the evaluation framework.
-  \item \textbf{Third deadline:} Contributed to integration and validation of the complete GALOIS pipeline by testing query execution across multiple datasets and variants. Assisted in verifying join handling and multi-relation query support. Reviewed experimental outputs and participated in consolidating results for the final report.
+  \item \textbf{Third deadline:} Contributed to integration and validation of the complete GALOIS pipeline by testing query execution across multiple datasets and variants. Assisted in verifying join handling and multi-relation query support. Reviewed experimental outputs and participated in consolidating results for the final report. Conducted Experiment 6, and contributed to the integration and validation of the complete GALOIS pipeline by testing query execution across multiple datasets and variants.
 \end{itemize}
 
 \end{document}
