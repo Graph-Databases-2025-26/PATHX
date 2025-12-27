@@ -1,4 +1,4 @@
-llm_provider: "gemini"       # watsonx | gemini | azure
+llm_provider: "watsonx"       # watsonx | gemini | azure
 prompt_strategy: "direct"     # direct | zero_shot | few_shot
 
 

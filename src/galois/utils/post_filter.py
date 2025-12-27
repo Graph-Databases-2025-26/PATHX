@@ -28,7 +28,7 @@ def post_filter_rows_duckdb(
     con = duckdb.connect(database=":memory:")
     try:
         # DuckDB can register a list[dict] directly as a relation in recent versions.
-        # If it fails in your environment, we can switch to pandas.DataFrame.
+        # If that is unsupported in this runtime, replace the registration with a pandas.DataFrame.
         con.register(view_name, rows)
         rel = con.table(view_name)
         filtered = rel.filter(combined).df()
