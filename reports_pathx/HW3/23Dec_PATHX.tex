@@ -874,10 +874,12 @@ This behavior indicates that the confidence scores produced by the LLM are only 
 \subsection{Experiment 4: Impact of Retrieved Values}
 
 Experiment~4 evaluates system performance across semantic and temporal query categories using the \textit{Presidents} dataset.
+The goal is to assess whether the \emph{retrieved values} appearing in query predicates (e.g., the country name) and the \emph{time span} of the requested facts affect answer quality, even when the query structure remains unchanged.
 Queries are grouped by country and by temporal scope, and results from all methods are aggregated within each group.
 The AVG-Score of each group is then compared to assess whether performance gains generalize across different semantic domains and time horizons.
 
 Table~\ref{tab:exp4_country} reports quality results in terms of AVG-Score when comparing the rarity of values across countries, while Table~\ref{tab:exp4_time} focuses on temporal categories.
+For temporal analysis, we define \textit{Past} as queries restricted to facts \emph{until 1900}, \textit{Recent} as queries restricted to facts \emph{from 1900 to today}, and \textit{All-Time} as queries spanning the full available timeline.
 
 \begin{table}[htbp]
 \centering
@@ -965,9 +967,12 @@ All-Time   & 0.325 & 0.562 & 0.703 & 0.722 & \textbf{0.857} \\
 \end{tabular}
 \end{table}
 
-As we can see in the table~\ref{tab:exp4_country}, performance of a query is affected by the size of the data in the training set. Indeed, we obtain better results on a "popular" data.
+As we can see in Table~\ref{tab:exp4_country}, performance is affected by the popularity/rarity of the queried values: we obtain better results on the more ``popular'' country (USA) compared to Venezuela.
+This is consistent with a \emph{popularity bias}, since entities that appear more frequently in the LLM pretraining data tend to be answered more accurately.
 
-Quality is also affected by how recent is the data we are querying. Table~\ref{tab:exp4_time} show that querying on recent data provides better results. It confirms the theory of the GALOIS paper: LLMs are more trained on recent data than past data
+Quality is also affected by how recent the queried facts are.
+Table~\ref{tab:exp4_time} shows that querying recent data yields better results than querying past data (until 1900), which is consistent with a \emph{temporal bias} where LLMs are generally exposed to more content about recent events than historical ones.
+Overall, these observations align with the findings reported in the GALOIS paper.
 
 \subsection{Experiment 5: Impact of Query Complexity}
 
