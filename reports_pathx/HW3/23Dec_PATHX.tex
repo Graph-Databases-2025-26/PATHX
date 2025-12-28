@@ -727,11 +727,9 @@ AVG-Score      & 0.637 & 0.598 & \textbf{0.708} \\
 \end{tabular}
 \end{table}
 
-The results show that indiscriminately pushing down all predicates (\textbf{GALOIS\_A}) reduces token usage but leads to a substantial degradation in answer quality.
-This indicates that unreliable predicates can overconstrain the language model and hinder its reasoning process.
-In contrast, confidence-based predicate pushdown (\textbf{GALOIS\_F}) achieves the highest answer quality while also minimizing execution cost among the evaluated strategies.
-
-Confidence-aware logical optimization enables \textsc{GALOIS} to outperform both aggressive pushdown and no-push baselines, achieving higher answer quality with lower token consumption.
+ 
+In our results, pushing down all predicates (GALOIS-A) achieves the best quality (highest AVG-Score), while confidence-based pushdown (GALOIS-F) uses fewer tokens than GALOIS-A but yields lower quality. 
+No-Push is the most token-efficient, but it has the lowest AVG-Score.
 
 
 
