@@ -706,8 +706,8 @@ Table~\ref{tab:logical_optimization_reformatted} summarizes the results.
 \hline
 \textbf{Metric} & \textbf{No-Push} & \textbf{GALOIS$_A$} & \textbf{GALOIS$_F$} \\
 \hline
-AVG-Score     & 0.631 & 0.579 & \textbf{0.699} \\
-\#Tokens in M & 0.178 & 0.098 & \textbf{0.090} \\
+AVG-Score     & 0.251 & 0.526 & 0.474 \\
+\#Tokens in M & 0.018 & 0.037 & 0.028 \\
 \hline
 \end{tabular}
 \end{table}
@@ -874,10 +874,12 @@ This behavior indicates that the confidence scores produced by the LLM are only 
 \subsection{Experiment 4: Impact of Retrieved Values}
 
 Experiment~4 evaluates system performance across semantic and temporal query categories using the \textit{Presidents} dataset.
+The goal is to assess whether the \emph{retrieved values} appearing in query predicates (e.g., the country name) and the \emph{time span} of the requested facts affect answer quality, even when the query structure remains unchanged.
 Queries are grouped by country and by temporal scope, and results from all methods are aggregated within each group.
 The AVG-Score of each group is then compared to assess whether performance gains generalize across different semantic domains and time horizons.
 
 Table~\ref{tab:exp4_country} reports quality results in terms of AVG-Score when comparing the rarity of values across countries, while Table~\ref{tab:exp4_time} focuses on temporal categories.
+For temporal analysis, we define \textit{Past} as queries restricted to facts \emph{until 1900}, \textit{Recent} as queries restricted to facts \emph{from 1900 to today}, and \textit{All-Time} as queries spanning the full available timeline.
 
 \begin{table}[htbp]
 \centering
@@ -888,18 +890,18 @@ Table~\ref{tab:exp4_country} reports quality results in terms of AVG-Score when 
 Dataset & NL & SQL & GALOIS\_WO & GALOIS\_A & GALOIS\_F \\
 \hline
 Presidents--USA
-& 0.260
-& 0.532
-& 0.726
-& \textit{0.785}
-& \textbf{0.842} \\
+& 0.327
+& 0.679
+& 0.289
+& \textbf{0.688}
+& 0.577 \\
 
 Presidents--Venezuela
-& 0.207
-& 0.275
-& 0.407
-& \textit{0.416}
-& \textbf{0.475} \\
+& 0.253
+& 0.355
+& 0.162
+& \textbf{0.374}
+& 0.322 \\
 \hline
 \end{tabular}
 \end{table}
@@ -913,25 +915,25 @@ Presidents--Venezuela
 Dataset & NL & SQL & GALOIS\_WO & GALOIS\_A & GALOIS\_F \\
 \hline
 Recent
-& 0.204
-& 0.392
-& 0.524
-& \textit{0.579}
-& \textbf{0.617} \\
+& 0.260
+& 0.495
+& 0.209
+& \textbf{0.514}
+& 0.417 \\
 
 Past
-& 0.168
-& 0.298
-& 0.462
-& \textit{0.512}
-& \textbf{0.542} \\
+& 0.213
+& 0.379
+& 0.185
+& \textbf{0.456}
+& 0.367 \\
 
 All-Time
-& 0.319
-& 0.554
-& 0.695
-& \textit{0.716}
-& \textbf{0.848} \\
+& 0.404
+& \textbf{0.699}
+& 0.277
+& 0.635
+& 0.573 \\
 \hline
 \end{tabular}
 \end{table}
@@ -965,9 +967,12 @@ All-Time   & 0.325 & 0.562 & 0.703 & 0.722 & \textbf{0.857} \\
 \end{tabular}
 \end{table}
 
-As we can see in the table~\ref{tab:exp4_country}, performance of a query is affected by the size of the data in the training set. Indeed, we obtain better results on a "popular" data.
+As we can see in Table~\ref{tab:exp4_country}, performance is affected by the popularity/rarity of the queried values: we obtain better results on the more ``popular'' country (USA) compared to Venezuela.
+This is consistent with a \emph{popularity bias}, since entities that appear more frequently in the LLM pretraining data tend to be answered more accurately.
 
-Quality is also affected by how recent is the data we are querying. Table~\ref{tab:exp4_time} show that querying on recent data provides better results. It confirms the theory of the GALOIS paper: LLMs are more trained on recent data than past data
+Quality is also affected by how recent the queried facts are.
+Table~\ref{tab:exp4_time} shows that querying recent data yields better results than querying past data (until 1900), which is consistent with a \emph{temporal bias} where LLMs are generally exposed to more content about recent events than historical ones.
+Overall, these observations align with the findings reported in the GALOIS paper.
 
 \subsection{Experiment 5: Impact of Query Complexity}
 
@@ -1044,6 +1049,23 @@ OTHER
 \end{tabular}
 \end{table}
 
+\begin{table}[htbp]
+\centering
+\caption{Results of Table 8 in GALOIS paper}
+\label{tab:exp_conditions}
+\begin{tabular}{lccccc}
+\hline
+\textbf{Condition(s)} & \textbf{NL} & \textbf{SQL} & \textbf{GALOIS\_WO} & \textbf{GALOIS\_A} & \textbf{GALOIS\_F} \\
+\hline
+1 TEXTUAL             & 0.319 & 0.600 & 0.566 & 0.674 & \textbf{0.699} \\
+$>$1 TEXTUAL          & 0.283 & 0.565 & 0.577 & 0.647 & \textbf{0.695} \\
+$>$1 TEXT., 1 NUMER.  & 0.264 & 0.527 & 0.528 & 0.619 & \textbf{0.633} \\
+$>$1 TEXT., $>$1 NUMER. & 0.222 & 0.384 & 0.479 & 0.530 & \textbf{0.539} \\
+1 NUMERICAL           & 0.260 & 0.545 & 0.486 & 0.500 & \textbf{0.517} \\
+$>$1 NUMERICAL        & 0.223 & 0.455 & \textbf{0.532} & 0.459 & 0.512 \\
+\hline
+\end{tabular}
+\end{table}
 
 
 Results in Table~\ref{tab:exp5_where_conditions} show that query complexity has a strong impact on baseline methods, while the optimized GALOIS variants exhibit more robust behavior as logical constraints become more complex.
@@ -1251,7 +1273,6 @@ Simple selection–projection queries (SP2, SP2>) are handled well by all system
 \label{fig:exp6_tokens}
 \end{figure}
 
-
 For most categories, the GALOIS variants consume more tokens than the baselines while achieving comparable or better AVG-Score, confirming the benefit of these systems. Figure~\ref{fig:exp6_avgscore} shows that structured plans are particularly beneficial for complex queries involving \texttt{DISTINCT}, aggregation, and in particular in grouping and when having multiple \texttt{WHERE} conditions, where they deliver higher or similar quality at a higher token cost compared to NL and SQL baselines.
 The JOIN class is again an exception: since our implementation currently does not support joins, the small token counts in Figure~\ref{fig:exp6_tokens} only reflect the limited amount of work performed, not an efficiency advantage.
 
@@ -1269,6 +1290,21 @@ Metric & Galois\_WO & Galois\_A & Galois\_F \\
 Avg \# Input Tokens All Iters & 41065 & 9054 & 30165 \\
 Avg \# Iters per query        & 102.79  & 4.54 & 2.17  \\
 \# Queries with 10+ Iters      & 36     & 0    & 0     \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Results of Table 9 in GALOIS paper}
+\label{tab:iters_tokens_stats}
+\begin{tabular}{lccc}
+\hline
+ & \textbf{GALOIS$_{\emptyset}$} & \textbf{GALOIS$_A$} & \textbf{GALOIS$_F$} \\
+\hline
+Avg \# Input Tokens (All Iters) & 63405 & 5137 & 2930 \\
+Avg \# Iters per Query          & 6.82  & 4.22 & 3.92 \\
+\# Queries with 10+ Iters       & 37    & 1    & 4 \\
 \hline
 \end{tabular}
 \end{table}
